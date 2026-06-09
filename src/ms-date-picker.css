@@ -9,6 +9,13 @@
   --msdp-active-text: #ffffff;
   --msdp-focus: #111111;
   --msdp-disabled: #b7b7b7;
+  --msdp-open-duration: 180ms;
+  --msdp-close-duration: 170ms;
+  --msdp-view-duration: 180ms;
+  --msdp-zoom-duration: 160ms;
+  --msdp-fade-duration: 120ms;
+  --msdp-select-duration: 160ms;
+  --msdp-animation-easing: cubic-bezier(0.16, 1, 0.3, 1);
   position: absolute;
   z-index: 2147483000;
   width: 316px;
@@ -27,7 +34,7 @@
   opacity: 0;
   transform: translateY(-8px) scale(0.985);
   transform-origin: top center;
-  transition: opacity 140ms ease, transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity var(--msdp-close-duration) ease, transform var(--msdp-open-duration) var(--msdp-animation-easing);
 }
 
 .msdp-popover *,
@@ -48,6 +55,7 @@
 .msdp-popover.is-closing {
   opacity: 0;
   transform: translateY(-6px) scale(0.99);
+  transition-duration: var(--msdp-close-duration);
 }
 
 .msdp-header {
@@ -175,7 +183,7 @@
 .msdp-tile.is-selected {
   color: var(--msdp-active-text);
   background: var(--msdp-active);
-  animation: msdp-select-pop 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: msdp-select-pop var(--msdp-select-duration) var(--msdp-animation-easing);
 }
 
 .msdp-day.is-selected.is-today::after {
@@ -205,19 +213,19 @@
 }
 
 .msdp-view-forward {
-  animation: msdp-slide-forward 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: msdp-slide-forward var(--msdp-view-duration) var(--msdp-animation-easing);
 }
 
 .msdp-view-back {
-  animation: msdp-slide-back 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: msdp-slide-back var(--msdp-view-duration) var(--msdp-animation-easing);
 }
 
 .msdp-view-zoom {
-  animation: msdp-zoom-in 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: msdp-zoom-in var(--msdp-zoom-duration) var(--msdp-animation-easing);
 }
 
 .msdp-view-fade {
-  animation: msdp-fade-in 120ms ease;
+  animation: msdp-fade-in var(--msdp-fade-duration) ease;
 }
 
 .msdp-tile {
@@ -240,6 +248,22 @@
 
 .msdp-footer .msdp-button {
   flex: 1;
+}
+
+.msdp-popover.msdp-no-animation,
+.msdp-popover.msdp-no-animation .msdp-button,
+.msdp-popover.msdp-no-animation .msdp-day,
+.msdp-popover.msdp-no-animation .msdp-tile {
+  transition: none;
+}
+
+.msdp-popover.msdp-no-animation .msdp-view-forward,
+.msdp-popover.msdp-no-animation .msdp-view-back,
+.msdp-popover.msdp-no-animation .msdp-view-zoom,
+.msdp-popover.msdp-no-animation .msdp-view-fade,
+.msdp-popover.msdp-no-animation .msdp-day.is-selected,
+.msdp-popover.msdp-no-animation .msdp-tile.is-selected {
+  animation: none;
 }
 
 @keyframes msdp-slide-forward {

@@ -30,6 +30,17 @@ new MSDatePicker(input, {
   format: "DD-MM-YYYY",
   language: "en",
   theme: "auto",
+  showTodayButton: true,
+  animations: {
+    enabled: true,
+    openDuration: 180,
+    closeDuration: 170,
+    viewDuration: 180,
+    zoomDuration: 160,
+    fadeDuration: 120,
+    selectDuration: 160,
+    easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+  },
   colors: {
     selectedBackground: null,
     selectedText: null,
@@ -60,6 +71,35 @@ new MSDatePicker(input, {
     selectedBackground: "#16a34a",
     selectedText: "#ffffff",
   },
+});
+```
+
+Hide the Today button with `showTodayButton: false`:
+
+```js
+new MSDatePicker(input, {
+  showTodayButton: false,
+});
+```
+
+Customize or disable animations with `animations`:
+
+```js
+new MSDatePicker(input, {
+  animations: {
+    enabled: true,
+    openDuration: 220,
+    closeDuration: 140,
+    viewDuration: 260,
+    zoomDuration: 180,
+    fadeDuration: 120,
+    selectDuration: 220,
+    easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+  },
+});
+
+new MSDatePicker(input, {
+  animations: false,
 });
 ```
 

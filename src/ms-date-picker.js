@@ -6,6 +6,17 @@
     language: "en",
     theme: "auto",
     colors: {},
+    showTodayButton: true,
+    animations: {
+      enabled: true,
+      openDuration: 180,
+      closeDuration: 170,
+      viewDuration: 180,
+      zoomDuration: 160,
+      fadeDuration: 120,
+      selectDuration: 160,
+      easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+    },
     defaultDate: null,
     minDate: null,
     maxDate: null,
@@ -103,6 +114,29 @@
 
   function normalizeTheme(value) {
     return value === "light" || value === "dark" ? value : "auto";
+  }
+
+  function duration(value, fallback) {
+    const number = Number(value);
+    return Number.isFinite(number) && number >= 0 ? number : fallback;
+  }
+
+  function normalizeAnimations(value) {
+    const defaults = DEFAULT_OPTIONS.animations;
+    if (value === false) return { ...defaults, enabled: false };
+    if (value === true || value == null) return { ...defaults };
+    return {
+      ...defaults,
+      ...value,
+      enabled: value.enabled !== false,
+      openDuration: duration(value.openDuration, defaults.openDuration),
+      closeDuration: duration(value.closeDuration, defaults.closeDuration),
+      viewDuration: duration(value.viewDuration, defaults.viewDuration),
+      zoomDuration: duration(value.zoomDuration, defaults.zoomDuration),
+      fadeDuration: duration(value.fadeDuration, defaults.fadeDuration),
+      selectDuration: duration(value.selectDuration, defaults.selectDuration),
+      easing: value.easing || defaults.easing,
+    };
   }
 
   function parseDate(value, format, locale) {
@@ -226,6 +260,7 @@
       this.language = resolveLanguage(this.options.language);
       this.options.locale = this.options.locale || this.language.locale || "en";
       this.options.theme = normalizeTheme(this.options.theme);
+      this.options.animations = normalizeAnimations(this.options.animations);
       this.options.weekStartsOn = normalizeWeekStart(this.options.weekStartsOn);
       this.options.appendTo = this.options.appendTo || document.body;
       this.minDate = dateFromOption(this.options.minDate, this.options.format, this.options.locale);
@@ -350,7 +385,7 @@
           this.popover.hidden = true;
           this.popover.classList.remove("is-closing");
         }
-      }, 170);
+      }, this.options.animations.enabled ? this.options.animations.closeDuration : 0);
       document.removeEventListener("pointerdown", this.handleDocumentPointerDown, true);
       window.removeEventListener("resize", this.handleWindowChange);
       window.removeEventListener("scroll", this.handleWindowChange, true);
@@ -384,7 +419,7 @@
       this.popover.setAttribute("role", "dialog");
       this.popover.setAttribute("aria-modal", "false");
       this.popover.addEventListener("keydown", this.handlePopoverKeydown);
-      this.applyThemeAndColors();
+      this.applyAppearanceOptions();
 
       this.header = document.createElement("div");
       this.header.className = "msdp-header";
@@ -406,15 +441,18 @@
       this.footer = document.createElement("div");
       this.footer.className = "msdp-footer";
 
-      this.todayButton = this.button("msdp-button", this.language.labels.today, () => this.selectDate(stripTime(new Date())));
       this.clearButton = this.button("msdp-button", this.language.labels.clear, () => this.clearDate());
-      this.footer.append(this.todayButton, this.clearButton);
+      if (this.options.showTodayButton !== false) {
+        this.todayButton = this.button("msdp-button", this.language.labels.today, () => this.selectDate(stripTime(new Date())));
+        this.footer.appendChild(this.todayButton);
+      }
+      this.footer.appendChild(this.clearButton);
 
       this.popover.append(this.header, this.weekdays, this.body, this.footer);
       (this.options.appendTo || document.body).appendChild(this.popover);
     }
 
-    applyThemeAndColors() {
+    applyAppearanceOptions() {
       if (this.options.theme !== "auto") {
         this.popover.classList.add(`msdp-theme-${this.options.theme}`);
       }
@@ -425,6 +463,18 @@
 
       if (selectedBackground) this.popover.style.setProperty("--msdp-active", selectedBackground);
       if (selectedText) this.popover.style.setProperty("--msdp-active-text", selectedText);
+
+      if (!this.options.animations.enabled) {
+        this.popover.classList.add("msdp-no-animation");
+      }
+
+      this.popover.style.setProperty("--msdp-open-duration", `${this.options.animations.openDuration}ms`);
+      this.popover.style.setProperty("--msdp-close-duration", `${this.options.animations.closeDuration}ms`);
+      this.popover.style.setProperty("--msdp-view-duration", `${this.options.animations.viewDuration}ms`);
+      this.popover.style.setProperty("--msdp-zoom-duration", `${this.options.animations.zoomDuration}ms`);
+      this.popover.style.setProperty("--msdp-fade-duration", `${this.options.animations.fadeDuration}ms`);
+      this.popover.style.setProperty("--msdp-select-duration", `${this.options.animations.selectDuration}ms`);
+      this.popover.style.setProperty("--msdp-animation-easing", this.options.animations.easing);
     }
 
     button(className, text, onClick) {
@@ -437,7 +487,7 @@
     }
 
     render() {
-      this.todayButton.disabled = this.isDisabled(stripTime(new Date()));
+      if (this.todayButton) this.todayButton.disabled = this.isDisabled(stripTime(new Date()));
       if (this.view === VIEW_DAY) this.renderDays();
       if (this.view === VIEW_MONTH) this.renderMonths();
       if (this.view === VIEW_YEAR) this.renderYears();

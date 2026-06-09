@@ -126,7 +126,7 @@
         <div class="field">
           <label for="georgian-date">Georgian dark theme</label>
           <input id="georgian-date" type="text" placeholder="DD-MM-YYYY">
-          <code>language: "ka", theme: "dark", custom colors</code>
+          <code>hide Today, language: "ka", custom animation</code>
         </div>
       </section>
     </main>
@@ -141,6 +141,11 @@
       new MSDatePicker(document.querySelector("#georgian-date"), {
         language: "ka",
         theme: "dark",
+        showTodayButton: false,
+        animations: {
+          viewDuration: 260,
+          selectDuration: 220
+        },
         colors: {
           selectedBackground: "#16a34a",
           selectedText: "#ffffff"
