@@ -51,10 +51,13 @@ new MSDatePicker(input, {
   colors: {
     selectedBackground: null,
     selectedText: null,
+    background: null,
   },
   defaultDate: null,
   minDate: null,
   maxDate: null,
+  disableFutureDates: false,
+  scrollBackLimitYears: null,
   weekStartsOn: 1,
   closeOnSelect: true,
   locale: undefined,
@@ -65,18 +68,39 @@ new MSDatePicker(input, {
 });
 ```
 
-Supported format tokens are `D`, `DD`, `M`, `MM`, `MMM`, `MMMM`, `YY`, and `YYYY`.
+Supported format tokens are:
+- `D`: Day of month (e.g. `1`, `31`)
+- `DD`: Day of month, zero-padded (e.g. `01`, `31`)
+- `M`: Month number (e.g. `1`, `12`)
+- `MM`: Month number, zero-padded (e.g. `01`, `12`)
+- `MMM`: Short month name (e.g. `Jan`, `ივნ`)
+- `MMMM`: Full month name (e.g. `January`, `ივნისი`)
+- `YY`: Two-digit year (e.g. `26`)
+- `YYYY`: Four-digit year (e.g. `2026`)
+
+To use full month names in the input value, set the format to use `MMMM`, for example:
+```js
+new MSDatePicker(input, {
+  language: "ka",
+  format: "D MMMM YYYY", // Outputs "10 ივნისი 2026"
+});
+```
 
 `theme` can be `"auto"`, `"light"`, or `"dark"`. Auto follows the user's system color scheme.
 
-Set selected date colors with `colors.selectedBackground` and `colors.selectedText`:
+Set calendar colors using the `colors` option properties:
 
 ```js
 new MSDatePicker(input, {
-  theme: "dark",
+  theme: "auto",
   colors: {
     selectedBackground: "#16a34a",
     selectedText: "#ffffff",
+    // Can be a string (applies to all themes) or a light/dark object
+    background: {
+      light: "#ffffff",
+      dark: "#1e293b"
+    }
   },
 });
 ```
@@ -86,6 +110,30 @@ Hide the Today button with `showTodayButton: false`:
 ```js
 new MSDatePicker(input, {
   showTodayButton: false,
+});
+```
+
+Disable selecting future dates by setting `disableFutureDates: true`:
+
+```js
+new MSDatePicker(input, {
+  disableFutureDates: true,
+});
+```
+
+Limit scrolling back in years (so that scrolling isn't infinite) by setting `scrollBackLimitYears`:
+
+```js
+new MSDatePicker(input, {
+  scrollBackLimitYears: 10, // Stops scrolling back past 10 years ago
+});
+```
+
+You can also use the string `"today"` for `minDate` or `maxDate` options:
+
+```js
+new MSDatePicker(input, {
+  maxDate: "today", // Disables selecting any date after today
 });
 ```
 
@@ -161,6 +209,13 @@ Create your own language file with `MSDatePicker.registerLanguage`:
 MSDatePicker.registerLanguage("ka", {
   name: "Georgian",
   locale: "ka",
+  months: {
+    long: ["იანვარი", "თებერვალი", "მარტი", "აპრილი", "მაისი", "ივნისი", "ივლისი", "აგვისტო", "სექტემბერი", "ოქტომბერი", "ნოემბერი", "დეკემბერი"],
+    short: ["იან", "თებ", "მარ", "აპრ", "მაი", "ივნ", "ივლ", "აგვ", "სექ", "ოქტ", "ნოე", "დეკ"]
+  },
+  weekdays: {
+    short: ["კვი", "ორშ", "სამშ", "ოთხშ", "ხუთშ", "პარ", "შაბ"]
+  },
   labels: {
     today: "დღეს",
     clear: "გასუფთავება",
