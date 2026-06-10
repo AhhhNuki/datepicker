@@ -1456,31 +1456,22 @@
     }
 
     isDisabled(date) {
-      if (this.disableFutureDates) {
-        const today = stripTime(new Date());
-        if (date > today) return true;
-      }
-      return (this.minDate && date < this.minDate) || (this.maxDate && date > this.maxDate);
+      const { minLimit, maxLimit } = this.getScrollLimits();
+      return (minLimit && date < minLimit) || (maxLimit && date > maxLimit);
     }
 
     monthDisabled(date) {
       const first = localDate(date.getFullYear(), date.getMonth(), 1);
       const last = localDate(date.getFullYear(), date.getMonth() + 1, 0);
-      if (this.disableFutureDates) {
-        const today = stripTime(new Date());
-        if (first > today) return true;
-      }
-      return (this.maxDate && first > this.maxDate) || (this.minDate && last < this.minDate);
+      const { minLimit, maxLimit } = this.getScrollLimits();
+      return (maxLimit && first > maxLimit) || (minLimit && last < minLimit);
     }
 
     yearDisabled(date) {
       const first = localDate(date.getFullYear(), 0, 1);
       const last = localDate(date.getFullYear(), 11, 31);
-      if (this.disableFutureDates) {
-        const today = stripTime(new Date());
-        if (first > today) return true;
-      }
-      return (this.maxDate && first > this.maxDate) || (this.minDate && last < this.minDate);
+      const { minLimit, maxLimit } = this.getScrollLimits();
+      return (maxLimit && first > maxLimit) || (minLimit && last < minLimit);
     }
 
     monthStepDisabled(direction) {
@@ -1496,11 +1487,8 @@
       const start = (this.yearStart ?? this.viewDate.getFullYear()) + direction * 12;
       const first = localDate(start, 0, 1);
       const last = localDate(start + 11, 11, 31);
-      if (this.disableFutureDates) {
-        const today = stripTime(new Date());
-        if (first > today) return true;
-      }
-      return (this.maxDate && first > this.maxDate) || (this.minDate && last < this.minDate);
+      const { minLimit, maxLimit } = this.getScrollLimits();
+      return (maxLimit && first > maxLimit) || (minLimit && last < minLimit);
     }
   }
 
