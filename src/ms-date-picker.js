@@ -27,6 +27,8 @@
     defaultDate: null,
     minDate: null,
     maxDate: null,
+    disableFutureDates: false,
+    scrollBackLimitYears: null,
     weekStartsOn: 1,
     closeOnSelect: true,
     appendTo: null,
@@ -37,6 +39,13 @@
   const DEFAULT_LANGUAGE = {
     name: "English",
     locale: "en",
+    months: {
+      long: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+      short: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    },
+    weekdays: {
+      short: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    },
     labels: {
       today: "Today",
       clear: "Clear",
@@ -55,6 +64,12 @@
   const VIEW_DAY = "day";
   const VIEW_MONTH = "month";
   const VIEW_YEAR = "year";
+
+  const VIEW_LEVELS = {
+    [VIEW_DAY]: 0,
+    [VIEW_MONTH]: 1,
+    [VIEW_YEAR]: 2
+  };
 
   function pad(value, length) {
     return String(value).padStart(length, "0");
@@ -100,12 +115,22 @@
     return target;
   }
 
-  function monthNames(locale, style) {
+  function monthNames(locale, style, language) {
+    if (language && language.months && language.months[style]) {
+      return language.months[style];
+    }
     const formatter = new Intl.DateTimeFormat(locale, { month: style });
     return Array.from({ length: 12 }, (_, month) => formatter.format(localDate(2024, month, 1)));
   }
 
-  function weekdayNames(locale, weekStartsOn) {
+  function weekdayNames(locale, weekStartsOn, language) {
+    if (language && language.weekdays && language.weekdays.short) {
+      const names = language.weekdays.short;
+      return Array.from({ length: 7 }, (_, index) => {
+        const offset = (weekStartsOn + index) % 7;
+        return names[offset];
+      });
+    }
     const formatter = new Intl.DateTimeFormat(locale, { weekday: "short" });
     const baseSunday = localDate(2024, 0, 7);
     return Array.from({ length: 7 }, (_, index) => {
@@ -161,7 +186,7 @@
     };
   }
 
-  function parseDate(value, format, locale) {
+  function parseDate(value, format, locale, language) {
     if (!value) return null;
     if (isValidDate(value)) return stripTime(value);
     if (typeof value !== "string") return null;
@@ -195,8 +220,8 @@
     const match = text.match(new RegExp(pattern, "iu"));
     if (!match) return null;
 
-    const longMonths = monthNames(locale, "long").map((month) => month.toLocaleLowerCase());
-    const shortMonths = monthNames(locale, "short").map((month) => month.toLocaleLowerCase().replace(/\.$/, ""));
+    const longMonths = monthNames(locale, "long", language).map((month) => month.toLocaleLowerCase());
+    const shortMonths = monthNames(locale, "short", language).map((month) => month.toLocaleLowerCase().replace(/\.$/, ""));
     const dateParts = { day: 1, month: 0, year: null };
 
     tokens.forEach((token, index) => {
@@ -224,9 +249,9 @@
     return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
-  function formatDate(date, format, locale) {
-    const longMonths = monthNames(locale, "long");
-    const shortMonths = monthNames(locale, "short");
+  function formatDate(date, format, locale, language) {
+    const longMonths = monthNames(locale, "long", language);
+    const shortMonths = monthNames(locale, "short", language);
     const replacements = {
       YYYY: String(date.getFullYear()),
       YY: pad(date.getFullYear() % 100, 2),
@@ -241,16 +266,25 @@
     return format.replace(/YYYY|MMMM|MMM|YY|DD|MM|D|M/g, (token) => replacements[token]);
   }
 
-  function dateFromOption(value, format, locale) {
+  function dateFromOption(value, format, locale, language) {
     if (!value) return null;
+    if (value === "today") return stripTime(new Date());
     if (isValidDate(value)) return stripTime(value);
-    return parseDate(String(value), format, locale);
+    return parseDate(String(value), format, locale, language);
   }
 
   function mergeLanguage(language) {
     return {
       ...DEFAULT_LANGUAGE,
       ...(language || {}),
+      months: {
+        ...DEFAULT_LANGUAGE.months,
+        ...((language && language.months) || {}),
+      },
+      weekdays: {
+        ...DEFAULT_LANGUAGE.weekdays,
+        ...((language && language.weekdays) || {}),
+      },
       labels: {
         ...DEFAULT_LANGUAGE.labels,
         ...((language && language.labels) || {}),
@@ -286,8 +320,9 @@
       this.options.scrollNavigation = normalizeScrollNavigation(this.options.scrollNavigation);
       this.options.weekStartsOn = normalizeWeekStart(this.options.weekStartsOn);
       this.options.appendTo = this.options.appendTo || document.body;
-      this.minDate = dateFromOption(this.options.minDate, this.options.format, this.options.locale);
-      this.maxDate = dateFromOption(this.options.maxDate, this.options.format, this.options.locale);
+      this.minDate = dateFromOption(this.options.minDate, this.options.format, this.options.locale, this.language);
+      this.maxDate = dateFromOption(this.options.maxDate, this.options.format, this.options.locale, this.language);
+      this.disableFutureDates = this.options.disableFutureDates === true;
       this.selectedDate = null;
       this.activeDate = stripTime(new Date());
       this.viewDate = stripTime(new Date());
@@ -301,12 +336,18 @@
       this.lastView = this.view;
       this.previousReadOnly = this.input.readOnly;
 
-      const initial = dateFromOption(this.options.defaultDate, this.options.format, this.options.locale) || parseDate(this.input.value, this.options.format, this.options.locale);
+      const initial = dateFromOption(this.options.defaultDate, this.options.format, this.options.locale, this.language) || parseDate(this.input.value, this.options.format, this.options.locale, this.language);
       if (initial) {
-        this.selectedDate = clampDate(initial, this.minDate, this.maxDate);
-        this.activeDate = stripTime(this.selectedDate);
-        this.viewDate = stripTime(this.selectedDate);
-        if (this.options.defaultDate && !this.input.value) this.input.value = this.format(this.selectedDate);
+        let selected = clampDate(initial, this.minDate, this.maxDate);
+        if (selected && this.isDisabled(selected)) {
+          selected = null;
+        }
+        this.selectedDate = selected;
+        if (this.selectedDate) {
+          this.activeDate = stripTime(this.selectedDate);
+          this.viewDate = stripTime(this.selectedDate);
+          if (this.options.defaultDate && !this.input.value) this.input.value = this.format(this.selectedDate);
+        }
       }
 
       this.handleInputFocus = this.open.bind(this);
@@ -349,15 +390,15 @@
     }
 
     format(date) {
-      return formatDate(date, this.options.format, this.options.locale);
+      return formatDate(date, this.options.format, this.options.locale, this.language);
     }
 
     parse(value) {
-      return parseDate(value, this.options.format, this.options.locale);
+      return parseDate(value, this.options.format, this.options.locale, this.language);
     }
 
     setDate(value, silent) {
-      const parsed = dateFromOption(value, this.options.format, this.options.locale);
+      const parsed = dateFromOption(value, this.options.format, this.options.locale, this.language);
       this.selectedDate = parsed ? clampDate(parsed, this.minDate, this.maxDate) : null;
       if (this.selectedDate) {
         this.activeDate = stripTime(this.selectedDate);
@@ -475,6 +516,8 @@
       this.weekdays.className = "msdp-weekdays";
 
       this.body = document.createElement("div");
+      this.body.className = "msdp-body msdp-view";
+      this.body.addEventListener("scroll", () => this.handleScroll());
       this.footer = document.createElement("div");
       this.footer.className = "msdp-footer";
 
@@ -497,9 +540,19 @@
       const colors = this.options.colors || {};
       const selectedBackground = colors.selectedBackground || colors.selectedDateBackground || colors.selectedBackgroundColor;
       const selectedText = colors.selectedText || colors.selectedDateText || colors.selectedTextColor;
+      const calendarBackground = colors.background || colors.calendarBackground || colors.calendarBackgroundColor;
 
       if (selectedBackground) this.popover.style.setProperty("--msdp-active", selectedBackground);
       if (selectedText) this.popover.style.setProperty("--msdp-active-text", selectedText);
+      if (calendarBackground) {
+        if (typeof calendarBackground === "object") {
+          if (calendarBackground.light) this.popover.style.setProperty("--msdp-bg-light", calendarBackground.light);
+          if (calendarBackground.dark) this.popover.style.setProperty("--msdp-bg-dark", calendarBackground.dark);
+        } else {
+          this.popover.style.setProperty("--msdp-bg-light", calendarBackground);
+          this.popover.style.setProperty("--msdp-bg-dark", calendarBackground);
+        }
+      }
 
       if (!this.options.animations.enabled) {
         this.popover.classList.add("msdp-no-animation");
@@ -525,105 +578,675 @@
 
     render() {
       if (this.todayButton) this.todayButton.disabled = this.isDisabled(stripTime(new Date()));
+      
+      const animClass = this.transitionClass();
+
       if (this.view === VIEW_DAY) this.renderDays();
       if (this.view === VIEW_MONTH) this.renderMonths();
       if (this.view === VIEW_YEAR) this.renderYears();
+
+      // Trigger animation on body
+      this.body.classList.remove("msdp-view-zoom-in", "msdp-view-zoom-out", "msdp-view-fade", "msdp-view-forward", "msdp-view-back");
+      void this.body.offsetWidth; // Force reflow
+      this.body.classList.add(animClass);
+
       this.lastViewDate = stripTime(this.viewDate);
       this.lastView = this.view;
     }
 
+    getScrollLimits() {
+      let maxLimit = this.maxDate ? new Date(this.maxDate) : null;
+      if (this.disableFutureDates) {
+        const today = stripTime(new Date());
+        if (!maxLimit || today < maxLimit) {
+          maxLimit = today;
+        }
+      }
+
+      let minLimit = this.minDate ? new Date(this.minDate) : null;
+      if (this.options.scrollBackLimitYears !== null && this.options.scrollBackLimitYears !== undefined) {
+        const today = new Date();
+        const limitYear = today.getFullYear() - this.options.scrollBackLimitYears;
+        const limitDate = localDate(limitYear, 0, 1);
+        if (!minLimit || limitDate > minLimit) {
+          minLimit = limitDate;
+        }
+      }
+
+      return { minLimit, maxLimit };
+    }
+
     renderDays() {
-      const monthFormatter = new Intl.DateTimeFormat(this.options.locale, { month: "long", year: "numeric" });
-      this.titleButton.textContent = monthFormatter.format(this.viewDate);
-      this.titleButton.setAttribute("aria-label", this.language.labels.chooseMonthYear);
-      this.weekdays.hidden = false;
-      this.weekdays.replaceChildren(...weekdayNames(this.options.locale, this.options.weekStartsOn).map((name) => {
+      // Clear body
+      this.body.replaceChildren();
+
+      this.weekdays.style.visibility = "";
+      this.weekdays.replaceChildren(...weekdayNames(this.options.locale, this.options.weekStartsOn, this.language).map((name) => {
         const day = document.createElement("div");
         day.textContent = name;
         return day;
       }));
 
-      const grid = document.createElement("div");
-      grid.className = `msdp-days msdp-view ${this.transitionClass()}`;
-      grid.setAttribute("role", "grid");
-
-      const firstOfMonth = localDate(this.viewDate.getFullYear(), this.viewDate.getMonth(), 1);
-      const offset = (firstOfMonth.getDay() - this.options.weekStartsOn + 7) % 7;
-      const start = addDays(firstOfMonth, -offset);
-
-      for (let index = 0; index < 42; index += 1) {
-        const date = addDays(start, index);
-        const day = this.button("msdp-day", String(date.getDate()), () => this.selectDate(date));
-        day.setAttribute("role", "gridcell");
-        day.setAttribute("aria-label", new Intl.DateTimeFormat(this.options.locale, { dateStyle: "full" }).format(date));
-        day.disabled = this.isDisabled(date);
-        if (!sameMonth(date, this.viewDate)) day.classList.add("is-outside");
-        if (sameDay(date, new Date())) day.classList.add("is-today");
-        if (sameDay(date, this.selectedDate)) day.classList.add("is-selected");
-        if (sameDay(date, this.activeDate)) day.tabIndex = 0;
-        else day.tabIndex = -1;
-        grid.appendChild(day);
+      // We will render months from this.renderedStart to this.renderedEnd
+      // Initialize them if they are not set, or if the viewDate is outside the range
+      if (!this.renderedStart || !this.renderedEnd || this.viewDate < this.renderedStart || this.viewDate > this.renderedEnd) {
+        this.renderedStart = addMonths(this.viewDate, -6);
+        this.renderedEnd = addMonths(this.viewDate, 6);
       }
 
-      this.body.replaceChildren(grid);
+      const { minLimit, maxLimit } = this.getScrollLimits();
+      if (minLimit) {
+        const firstOfMinLimit = new Date(minLimit.getFullYear(), minLimit.getMonth(), 1);
+        if (this.renderedStart < firstOfMinLimit) this.renderedStart = firstOfMinLimit;
+      }
+      if (maxLimit) {
+        const firstOfMaxLimit = new Date(maxLimit.getFullYear(), maxLimit.getMonth(), 1);
+        if (this.renderedEnd > firstOfMaxLimit) this.renderedEnd = firstOfMaxLimit;
+      }
+      if (this.renderedStart > this.renderedEnd) {
+        this.renderedStart = this.renderedEnd;
+      }
+
+      let currentDate = new Date(this.renderedStart.getFullYear(), this.renderedStart.getMonth(), 1);
+      const endDate = new Date(this.renderedEnd.getFullYear(), this.renderedEnd.getMonth(), 1);
+
+      this.monthElements = [];
+
+      while (currentDate <= endDate) {
+        const monthSection = this.createMonthSection(currentDate);
+        this.body.appendChild(monthSection);
+        this.monthElements.push({
+          date: new Date(currentDate),
+          element: monthSection
+        });
+        currentDate = addMonths(currentDate, 1);
+      }
+
+      // Now scroll to the active viewDate month
+      this.scrollToMonth(this.viewDate, false);
+
+      // Disable/enable next/prev buttons based on minDate/maxDate
       this.prevButton.disabled = this.monthStepDisabled(-1);
       this.nextButton.disabled = this.monthStepDisabled(1);
     }
 
+    createMonthSection(date) {
+      const section = document.createElement("div");
+      section.className = "msdp-month-section";
+      section.dataset.year = date.getFullYear();
+      section.dataset.month = date.getMonth();
+
+      const header = document.createElement("div");
+      header.className = "msdp-month-header";
+      
+      let monthName = "";
+      if (this.language && this.language.months && this.language.months.long) {
+        monthName = this.language.months.long[date.getMonth()];
+      } else {
+        const monthFormatter = new Intl.DateTimeFormat(this.options.locale, { month: "long" });
+        monthName = monthFormatter.format(date);
+      }
+      header.textContent = `${monthName} ${date.getFullYear()}`;
+      section.appendChild(header);
+
+      const grid = document.createElement("div");
+      grid.className = "msdp-days";
+      grid.setAttribute("role", "grid");
+
+      const firstOfMonth = localDate(date.getFullYear(), date.getMonth(), 1);
+      const offset = (firstOfMonth.getDay() - this.options.weekStartsOn + 7) % 7;
+      const start = addDays(firstOfMonth, -offset);
+
+      for (let index = 0; index < 42; index += 1) {
+        const d = addDays(start, index);
+        const day = this.button("msdp-day", String(d.getDate()), () => this.selectDate(d));
+        day.setAttribute("role", "gridcell");
+        day.setAttribute("aria-label", new Intl.DateTimeFormat(this.options.locale, { dateStyle: "full" }).format(d));
+        day.disabled = this.isDisabled(d);
+        if (!sameMonth(d, date)) day.classList.add("is-outside");
+        if (sameDay(d, new Date())) day.classList.add("is-today");
+        if (sameDay(d, this.selectedDate)) day.classList.add("is-selected");
+        if (sameDay(d, this.activeDate)) day.tabIndex = 0;
+        else day.tabIndex = -1;
+        grid.appendChild(day);
+      }
+
+      section.appendChild(grid);
+      return section;
+    }
+
+    scrollToMonth(date, smooth = true) {
+      const match = this.monthElements.find(item => item.date.getFullYear() === date.getFullYear() && item.date.getMonth() === date.getMonth());
+      if (match) {
+        this.isProgrammaticScrolling = true;
+        const doScroll = () => {
+          this.body.scrollTo({
+            top: match.element.offsetTop,
+            behavior: smooth ? "smooth" : "auto"
+          });
+          setTimeout(() => {
+            this.isProgrammaticScrolling = false;
+          }, smooth ? 300 : 50);
+        };
+        if (!smooth) {
+          nextFrame(doScroll);
+        } else {
+          doScroll();
+        }
+        this.updateHeaderTitle(date);
+      }
+    }
+
+    updateHeaderTitle(date) {
+      let monthName = "";
+      if (this.language && this.language.months && this.language.months.long) {
+        monthName = this.language.months.long[date.getMonth()];
+      } else {
+        const monthFormatter = new Intl.DateTimeFormat(this.options.locale, { month: "long" });
+        monthName = monthFormatter.format(date);
+      }
+      this.titleButton.textContent = `${monthName} ${date.getFullYear()}`;
+      this.titleButton.setAttribute("aria-label", this.language.labels.chooseMonthYear);
+    }
+
+    handleScroll() {
+      if (this.isProgrammaticScrolling) return;
+
+      if (this.view === VIEW_DAY) {
+        this.handleScrollDays();
+      } else if (this.view === VIEW_MONTH) {
+        this.handleScrollMonths();
+      } else if (this.view === VIEW_YEAR) {
+        this.handleScrollYears();
+      }
+    }
+
+    handleScrollDays() {
+      const bodyRect = this.body.getBoundingClientRect();
+      const bodyTop = bodyRect.top;
+      
+      let bestMatch = null;
+      let minDiff = Infinity;
+
+      this.monthElements.forEach(item => {
+        const rect = item.element.getBoundingClientRect();
+        const diff = Math.abs(rect.top - bodyTop);
+        if (diff < minDiff) {
+          minDiff = diff;
+          bestMatch = item;
+        }
+      });
+
+      if (bestMatch && (this.viewDate.getFullYear() !== bestMatch.date.getFullYear() || this.viewDate.getMonth() !== bestMatch.date.getMonth())) {
+        this.viewDate = new Date(bestMatch.date);
+        this.updateHeaderTitle(this.viewDate);
+        this.prevButton.disabled = this.monthStepDisabled(-1);
+        this.nextButton.disabled = this.monthStepDisabled(1);
+      }
+
+      const scrollTop = this.body.scrollTop;
+      const scrollHeight = this.body.scrollHeight;
+      const clientHeight = this.body.clientHeight;
+
+      if (scrollTop < 150) {
+        const { minLimit } = this.getScrollLimits();
+        const newStart = addMonths(this.renderedStart, -6);
+        let currentDate = new Date(newStart.getFullYear(), newStart.getMonth(), 1);
+        const endDate = addMonths(this.renderedStart, -1);
+
+        if (minLimit) {
+          const firstOfMinLimit = new Date(minLimit.getFullYear(), minLimit.getMonth(), 1);
+          if (currentDate < firstOfMinLimit) {
+            currentDate = firstOfMinLimit;
+          }
+        }
+
+        if (currentDate <= endDate) {
+          const fragment = document.createDocumentFragment();
+          const prependedElements = [];
+
+          while (currentDate <= endDate) {
+            const section = this.createMonthSection(currentDate);
+            fragment.appendChild(section);
+            prependedElements.push({
+              date: new Date(currentDate),
+              element: section
+            });
+            currentDate = addMonths(currentDate, 1);
+          }
+
+          const oldScrollHeight = this.body.scrollHeight;
+
+          this.body.insertBefore(fragment, this.body.firstChild);
+          this.monthElements = [...prependedElements, ...this.monthElements];
+          this.renderedStart = prependedElements[0].date;
+
+          const newScrollHeight = this.body.scrollHeight;
+          this.body.scrollTop = scrollTop + (newScrollHeight - oldScrollHeight);
+        }
+
+      } else if (scrollHeight - scrollTop - clientHeight < 150) {
+        const { maxLimit } = this.getScrollLimits();
+        const newEnd = addMonths(this.renderedEnd, 6);
+        let currentDate = addMonths(this.renderedEnd, 1);
+        let endDate = new Date(newEnd.getFullYear(), newEnd.getMonth(), 1);
+
+        if (maxLimit) {
+          const firstOfMaxLimit = new Date(maxLimit.getFullYear(), maxLimit.getMonth(), 1);
+          if (endDate > firstOfMaxLimit) {
+            endDate = firstOfMaxLimit;
+          }
+        }
+
+        if (currentDate <= endDate) {
+          while (currentDate <= endDate) {
+            const section = this.createMonthSection(currentDate);
+            this.body.appendChild(section);
+            this.monthElements.push({
+              date: new Date(currentDate),
+              element: section
+            });
+            currentDate = addMonths(currentDate, 1);
+          }
+          this.renderedEnd = endDate;
+        }
+      }
+    }
+
+    handleScrollMonths() {
+      const bodyRect = this.body.getBoundingClientRect();
+      const bodyTop = bodyRect.top;
+      
+      let bestMatch = null;
+      let minDiff = Infinity;
+
+      this.yearElements.forEach(item => {
+        const rect = item.element.getBoundingClientRect();
+        const diff = Math.abs(rect.top - bodyTop);
+        if (diff < minDiff) {
+          minDiff = diff;
+          bestMatch = item;
+        }
+      });
+
+      if (bestMatch && this.viewDate.getFullYear() !== bestMatch.year) {
+        this.viewDate = localDate(bestMatch.year, this.viewDate.getMonth(), 1);
+        this.updateHeaderTitleMonths(this.viewDate);
+        this.prevButton.disabled = this.yearStepDisabled(-1);
+        this.nextButton.disabled = this.yearStepDisabled(1);
+      }
+
+      const scrollTop = this.body.scrollTop;
+      const scrollHeight = this.body.scrollHeight;
+      const clientHeight = this.body.clientHeight;
+
+      if (scrollTop < 150) {
+        const { minLimit } = this.getScrollLimits();
+        const newStart = this.renderedYearsStart - 4;
+        let currentYear = newStart;
+        const endYear = this.renderedYearsStart - 1;
+
+        if (minLimit) {
+          const limitYear = minLimit.getFullYear();
+          if (currentYear < limitYear) {
+            currentYear = limitYear;
+          }
+        }
+
+        if (currentYear <= endYear) {
+          const fragment = document.createDocumentFragment();
+          const prependedElements = [];
+
+          while (currentYear <= endYear) {
+            const section = this.createYearSection(currentYear);
+            fragment.appendChild(section);
+            prependedElements.push({
+              year: currentYear,
+              element: section
+            });
+            currentYear++;
+          }
+
+          const oldScrollHeight = this.body.scrollHeight;
+
+          this.body.insertBefore(fragment, this.body.firstChild);
+          this.yearElements = [...prependedElements, ...this.yearElements];
+          this.renderedYearsStart = prependedElements[0].year;
+
+          const newScrollHeight = this.body.scrollHeight;
+          this.body.scrollTop = scrollTop + (newScrollHeight - oldScrollHeight);
+        }
+
+      } else if (scrollHeight - scrollTop - clientHeight < 150) {
+        const { maxLimit } = this.getScrollLimits();
+        const newEnd = this.renderedYearsEnd + 4;
+        let currentYear = this.renderedYearsEnd + 1;
+        let endYear = newEnd;
+
+        if (maxLimit) {
+          const limitYear = maxLimit.getFullYear();
+          if (endYear > limitYear) {
+            endYear = limitYear;
+          }
+        }
+
+        if (currentYear <= endYear) {
+          while (currentYear <= endYear) {
+            const section = this.createYearSection(currentYear);
+            this.body.appendChild(section);
+            this.yearElements.push({
+              year: currentYear,
+              element: section
+            });
+            currentYear++;
+          }
+          this.renderedYearsEnd = endYear;
+        }
+      }
+    }
+
+    handleScrollYears() {
+      const bodyRect = this.body.getBoundingClientRect();
+      const bodyTop = bodyRect.top;
+      
+      let bestMatch = null;
+      let minDiff = Infinity;
+
+      this.rangeElements.forEach(item => {
+        const rect = item.element.getBoundingClientRect();
+        const diff = Math.abs(rect.top - bodyTop);
+        if (diff < minDiff) {
+          minDiff = diff;
+          bestMatch = item;
+        }
+      });
+
+      if (bestMatch && (this.viewDate.getFullYear() < bestMatch.startYear || this.viewDate.getFullYear() >= bestMatch.startYear + 12)) {
+        this.viewDate = localDate(bestMatch.startYear, this.viewDate.getMonth(), 1);
+        this.yearStart = bestMatch.startYear;
+        this.updateHeaderTitleYears(bestMatch.startYear);
+        this.prevButton.disabled = this.yearRangeStepDisabled(-1);
+        this.nextButton.disabled = this.yearRangeStepDisabled(1);
+      }
+
+      const scrollTop = this.body.scrollTop;
+      const scrollHeight = this.body.scrollHeight;
+      const clientHeight = this.body.clientHeight;
+
+      if (scrollTop < 150) {
+        const { minLimit } = this.getScrollLimits();
+        const newStart = this.renderedRangesStart - 36;
+        let currentStart = newStart;
+        const endStart = this.renderedRangesStart - 12;
+
+        if (minLimit) {
+          const limitYear = minLimit.getFullYear();
+          const limitRangeStart = limitYear - (limitYear % 12);
+          if (currentStart < limitRangeStart) {
+            currentStart = limitRangeStart;
+          }
+        }
+
+        if (currentStart <= endStart) {
+          const fragment = document.createDocumentFragment();
+          const prependedElements = [];
+
+          while (currentStart <= endStart) {
+            const section = this.createYearRangeSection(currentStart);
+            fragment.appendChild(section);
+            prependedElements.push({
+              startYear: currentStart,
+              element: section
+            });
+            currentStart += 12;
+          }
+
+          const oldScrollHeight = this.body.scrollHeight;
+
+          this.body.insertBefore(fragment, this.body.firstChild);
+          this.rangeElements = [...prependedElements, ...this.rangeElements];
+          this.renderedRangesStart = prependedElements[0].startYear;
+
+          const newScrollHeight = this.body.scrollHeight;
+          this.body.scrollTop = scrollTop + (newScrollHeight - oldScrollHeight);
+        }
+
+      } else if (scrollHeight - scrollTop - clientHeight < 150) {
+        const { maxLimit } = this.getScrollLimits();
+        const newEnd = this.renderedRangesEnd + 36;
+        let currentStart = this.renderedRangesEnd + 12;
+        let endStart = newEnd;
+
+        if (maxLimit) {
+          const limitYear = maxLimit.getFullYear();
+          const limitRangeStart = limitYear - (limitYear % 12);
+          if (endStart > limitRangeStart) {
+            endStart = limitRangeStart;
+          }
+        }
+
+        if (currentStart <= endStart) {
+          while (currentStart <= endStart) {
+            const section = this.createYearRangeSection(currentStart);
+            this.body.appendChild(section);
+            this.rangeElements.push({
+              startYear: currentStart,
+              element: section
+            });
+            currentStart += 12;
+          }
+          this.renderedRangesEnd = endStart;
+        }
+      }
+    }
+
     renderMonths() {
+      this.body.replaceChildren();
       this.titleButton.textContent = String(this.viewDate.getFullYear());
       this.titleButton.setAttribute("aria-label", this.language.labels.chooseYear);
-      this.weekdays.hidden = true;
+      this.weekdays.style.visibility = "hidden";
 
-      const names = monthNames(this.options.locale, "short");
+      this.renderedYearsStart = this.viewDate.getFullYear() - 4;
+      this.renderedYearsEnd = this.viewDate.getFullYear() + 4;
+
+      const { minLimit, maxLimit } = this.getScrollLimits();
+      if (minLimit) {
+        const limitYear = minLimit.getFullYear();
+        if (this.renderedYearsStart < limitYear) this.renderedYearsStart = limitYear;
+      }
+      if (maxLimit) {
+        const limitYear = maxLimit.getFullYear();
+        if (this.renderedYearsEnd > limitYear) this.renderedYearsEnd = limitYear;
+      }
+      if (this.renderedYearsStart > this.renderedYearsEnd) {
+        this.renderedYearsStart = this.renderedYearsEnd;
+      }
+
+      let currentYear = this.renderedYearsStart;
+      const endYear = this.renderedYearsEnd;
+
+      this.yearElements = [];
+
+      while (currentYear <= endYear) {
+        const yearSection = this.createYearSection(currentYear);
+        this.body.appendChild(yearSection);
+        this.yearElements.push({
+          year: currentYear,
+          element: yearSection
+        });
+        currentYear++;
+      }
+
+      this.scrollToYear(this.viewDate.getFullYear(), false);
+
+      this.prevButton.disabled = this.yearStepDisabled(-1);
+      this.nextButton.disabled = this.yearStepDisabled(1);
+    }
+
+    createYearSection(year) {
+      const section = document.createElement("div");
+      section.className = "msdp-year-section";
+      section.dataset.year = year;
+
+      const header = document.createElement("div");
+      header.className = "msdp-year-header";
+      header.textContent = String(year);
+      section.appendChild(header);
+
       const grid = document.createElement("div");
-      grid.className = `msdp-grid msdp-view ${this.transitionClass()}`;
+      grid.className = "msdp-grid";
 
+      const names = monthNames(this.options.locale, "short", this.language);
       names.forEach((name, month) => {
-        const date = localDate(this.viewDate.getFullYear(), month, 1);
+        const date = localDate(year, month, 1);
         const tile = this.button("msdp-tile", name, () => {
           this.viewDate = date;
           this.view = VIEW_DAY;
           this.render();
         });
-        if (this.selectedDate && this.selectedDate.getFullYear() === date.getFullYear() && this.selectedDate.getMonth() === month) {
+        if (this.selectedDate && this.selectedDate.getFullYear() === year && this.selectedDate.getMonth() === month) {
           tile.classList.add("is-selected");
         }
         tile.disabled = this.monthDisabled(date);
         grid.appendChild(tile);
       });
 
-      this.body.replaceChildren(grid);
-      this.prevButton.disabled = this.yearStepDisabled(-1);
-      this.nextButton.disabled = this.yearStepDisabled(1);
+      section.appendChild(grid);
+      return section;
+    }
+
+    scrollToYear(year, smooth = true) {
+      const match = this.yearElements.find(item => item.year === year);
+      if (match) {
+        this.isProgrammaticScrolling = true;
+        const doScroll = () => {
+          this.body.scrollTo({
+            top: match.element.offsetTop,
+            behavior: smooth ? "smooth" : "auto"
+          });
+          setTimeout(() => {
+            this.isProgrammaticScrolling = false;
+          }, smooth ? 300 : 50);
+        };
+        if (!smooth) {
+          nextFrame(doScroll);
+        } else {
+          doScroll();
+        }
+        this.updateHeaderTitleMonths(this.viewDate);
+      }
+    }
+
+    updateHeaderTitleMonths(date) {
+      this.titleButton.textContent = String(date.getFullYear());
+      this.titleButton.setAttribute("aria-label", this.language.labels.chooseYear);
     }
 
     renderYears() {
+      this.body.replaceChildren();
       const currentYear = this.viewDate.getFullYear();
       this.yearStart = currentYear - (currentYear % 12);
       this.titleButton.textContent = `${this.yearStart} - ${this.yearStart + 11}`;
       this.titleButton.setAttribute("aria-label", this.language.labels.chooseDate);
-      this.weekdays.hidden = true;
+      this.weekdays.style.visibility = "hidden";
+
+      const currentRangeStart = this.yearStart;
+      this.renderedRangesStart = currentRangeStart - 36;
+      this.renderedRangesEnd = currentRangeStart + 36;
+
+      const { minLimit, maxLimit } = this.getScrollLimits();
+      if (minLimit) {
+        const limitYear = minLimit.getFullYear();
+        const limitRangeStart = limitYear - (limitYear % 12);
+        if (this.renderedRangesStart < limitRangeStart) this.renderedRangesStart = limitRangeStart;
+      }
+      if (maxLimit) {
+        const limitYear = maxLimit.getFullYear();
+        const limitRangeStart = limitYear - (limitYear % 12);
+        if (this.renderedRangesEnd > limitRangeStart) this.renderedRangesEnd = limitRangeStart;
+      }
+      if (this.renderedRangesStart > this.renderedRangesEnd) {
+        this.renderedRangesStart = this.renderedRangesEnd;
+      }
+
+      let currentStart = this.renderedRangesStart;
+      const endStart = this.renderedRangesEnd;
+
+      this.rangeElements = [];
+
+      while (currentStart <= endStart) {
+        const rangeSection = this.createYearRangeSection(currentStart);
+        this.body.appendChild(rangeSection);
+        this.rangeElements.push({
+          startYear: currentStart,
+          element: rangeSection
+        });
+        currentStart += 12;
+      }
+
+      this.scrollToYearRange(currentRangeStart, false);
+
+      this.prevButton.disabled = this.yearRangeStepDisabled(-1);
+      this.nextButton.disabled = this.yearRangeStepDisabled(1);
+    }
+
+    createYearRangeSection(startYear) {
+      const section = document.createElement("div");
+      section.className = "msdp-year-range-section";
+      section.dataset.startYear = startYear;
+
+      const header = document.createElement("div");
+      header.className = "msdp-year-range-header";
+      header.textContent = `${startYear} - ${startYear + 11}`;
+      section.appendChild(header);
 
       const grid = document.createElement("div");
-      grid.className = `msdp-grid msdp-view ${this.transitionClass()}`;
+      grid.className = "msdp-grid";
 
       for (let index = 0; index < 12; index += 1) {
-        const year = this.yearStart + index;
-        const date = localDate(year, 0, 1);
+        const year = startYear + index;
+        const date = localDate(year, this.viewDate.getMonth(), 1);
         const tile = this.button("msdp-tile", String(year), () => {
-          this.viewDate = localDate(year, this.viewDate.getMonth(), 1);
+          this.viewDate = date;
           this.view = VIEW_MONTH;
           this.render();
         });
-        if (this.selectedDate && this.selectedDate.getFullYear() === year) tile.classList.add("is-selected");
+        if (this.selectedDate && this.selectedDate.getFullYear() === year) {
+          tile.classList.add("is-selected");
+        }
         tile.disabled = this.yearDisabled(date);
         grid.appendChild(tile);
       }
 
-      this.body.replaceChildren(grid);
-      this.prevButton.disabled = this.yearRangeStepDisabled(-1);
-      this.nextButton.disabled = this.yearRangeStepDisabled(1);
+      section.appendChild(grid);
+      return section;
+    }
+
+    scrollToYearRange(startYear, smooth = true) {
+      const match = this.rangeElements.find(item => item.startYear === startYear);
+      if (match) {
+        this.isProgrammaticScrolling = true;
+        const doScroll = () => {
+          this.body.scrollTo({
+            top: match.element.offsetTop,
+            behavior: smooth ? "smooth" : "auto"
+          });
+          setTimeout(() => {
+            this.isProgrammaticScrolling = false;
+          }, smooth ? 300 : 50);
+        };
+        if (!smooth) {
+          nextFrame(doScroll);
+        } else {
+          doScroll();
+        }
+        this.updateHeaderTitleYears(startYear);
+      }
+    }
+
+    updateHeaderTitleYears(startYear) {
+      this.titleButton.textContent = `${startYear} - ${startYear + 11}`;
+      this.titleButton.setAttribute("aria-label", this.language.labels.chooseDate);
     }
 
     cycleView() {
@@ -637,14 +1260,44 @@
       if (this.view === VIEW_DAY && this.monthStepDisabled(direction)) return;
       if (this.view === VIEW_MONTH && this.yearStepDisabled(direction)) return;
       if (this.view === VIEW_YEAR && this.yearRangeStepDisabled(direction)) return;
-      if (this.view === VIEW_DAY) this.viewDate = addMonths(this.viewDate, direction);
-      if (this.view === VIEW_MONTH) this.viewDate = localDate(this.viewDate.getFullYear() + direction, this.viewDate.getMonth(), 1);
-      if (this.view === VIEW_YEAR) this.viewDate = localDate(this.viewDate.getFullYear() + direction * 12, this.viewDate.getMonth(), 1);
-      this.render();
+      if (this.view === VIEW_DAY) {
+        this.viewDate = addMonths(this.viewDate, direction);
+        if (!this.renderedStart || !this.renderedEnd || this.viewDate < this.renderedStart || this.viewDate > this.renderedEnd) {
+          this.renderedStart = addMonths(this.viewDate, -6);
+          this.renderedEnd = addMonths(this.viewDate, 6);
+          this.renderDays();
+        } else {
+          this.scrollToMonth(this.viewDate, true);
+        }
+      } else if (this.view === VIEW_MONTH) {
+        this.viewDate = localDate(this.viewDate.getFullYear() + direction, this.viewDate.getMonth(), 1);
+        if (!this.renderedYearsStart || !this.renderedYearsEnd || this.viewDate.getFullYear() < this.renderedYearsStart || this.viewDate.getFullYear() > this.renderedYearsEnd) {
+          this.renderedYearsStart = this.viewDate.getFullYear() - 4;
+          this.renderedYearsEnd = this.viewDate.getFullYear() + 4;
+          this.renderMonths();
+        } else {
+          this.scrollToYear(this.viewDate.getFullYear(), true);
+        }
+      } else if (this.view === VIEW_YEAR) {
+        this.viewDate = localDate(this.viewDate.getFullYear() + direction * 12, this.viewDate.getMonth(), 1);
+        const currentRangeStart = this.viewDate.getFullYear() - (this.viewDate.getFullYear() % 12);
+        if (!this.renderedRangesStart || !this.renderedRangesEnd || currentRangeStart < this.renderedRangesStart || currentRangeStart > this.renderedRangesEnd) {
+          this.renderedRangesStart = currentRangeStart - 36;
+          this.renderedRangesEnd = currentRangeStart + 36;
+          this.renderYears();
+        } else {
+          this.scrollToYearRange(currentRangeStart, true);
+        }
+      }
     }
 
     transitionClass() {
-      if (this.view !== this.lastView) return "msdp-view-zoom";
+      if (this.view !== this.lastView) {
+        if (!this.lastView) return "msdp-view-zoom-in";
+        const currentLevel = VIEW_LEVELS[this.view] ?? 0;
+        const lastLevel = VIEW_LEVELS[this.lastView] ?? 0;
+        return currentLevel < lastLevel ? "msdp-view-zoom-in" : "msdp-view-zoom-out";
+      }
       if (!this.lastViewDate) return "msdp-view-forward";
       if (this.viewDate > this.lastViewDate) return "msdp-view-forward";
       if (this.viewDate < this.lastViewDate) return "msdp-view-back";
@@ -701,16 +1354,32 @@
         this.moveActiveDate(moves[event.key]);
       } else if (event.key === "PageUp") {
         event.preventDefault();
-        this.activeDate = clampDate(addMonths(this.activeDate, event.shiftKey ? -12 : -1), this.minDate, this.maxDate);
-        this.viewDate = stripTime(this.activeDate);
-        this.render();
-        this.focusActiveDay();
+        let next = clampDate(addMonths(this.activeDate, event.shiftKey ? -12 : -1), this.minDate, this.maxDate);
+        if (next && this.isDisabled(next)) {
+          const today = stripTime(new Date());
+          next = clampDate(today, this.minDate, this.maxDate);
+          if (next && this.isDisabled(next)) next = null;
+        }
+        if (next) {
+          this.activeDate = next;
+          this.viewDate = stripTime(this.activeDate);
+          this.render();
+          this.focusActiveDay();
+        }
       } else if (event.key === "PageDown") {
         event.preventDefault();
-        this.activeDate = clampDate(addMonths(this.activeDate, event.shiftKey ? 12 : 1), this.minDate, this.maxDate);
-        this.viewDate = stripTime(this.activeDate);
-        this.render();
-        this.focusActiveDay();
+        let next = clampDate(addMonths(this.activeDate, event.shiftKey ? 12 : 1), this.minDate, this.maxDate);
+        if (next && this.isDisabled(next)) {
+          const today = stripTime(new Date());
+          next = clampDate(today, this.minDate, this.maxDate);
+          if (next && this.isDisabled(next)) next = null;
+        }
+        if (next) {
+          this.activeDate = next;
+          this.viewDate = stripTime(this.activeDate);
+          this.render();
+          this.focusActiveDay();
+        }
       } else if (event.key === "Home") {
         event.preventDefault();
         this.moveActiveDate(-((this.activeDate.getDay() - this.options.weekStartsOn + 7) % 7));
@@ -727,59 +1396,19 @@
     }
 
     onPopoverWheel(event) {
-      const settings = this.options.scrollNavigation;
-      if (!this.isOpen || !settings.enabled || !settings.wheel) return;
-
-      const horizontal = Math.abs(event.deltaX) > Math.abs(event.deltaY);
-      const delta = horizontal ? event.deltaX : event.deltaY;
-      if (Math.abs(delta) < settings.threshold) return;
-
-      const now = Date.now();
-      if (now - this.lastWheelNavigation < settings.wheelThrottle) {
-        event.preventDefault();
-        return;
-      }
-
-      event.preventDefault();
-      this.lastWheelNavigation = now;
-      this.moveView(delta > 0 ? 1 : -1);
+      // Bypassed completely as all views (day, month, year) are now vertically scrollable.
     }
 
     onTouchStart(event) {
-      const settings = this.options.scrollNavigation;
-      if (!this.isOpen || !settings.enabled || !settings.touch || !event.changedTouches.length) return;
-      const touch = event.changedTouches[0];
-      this.touchStart = {
-        x: touch.clientX,
-        y: touch.clientY,
-      };
+      // Bypassed completely as all views are now vertically scrollable.
     }
 
     onTouchMove(event) {
-      const settings = this.options.scrollNavigation;
-      if (!this.touchStart || !settings.enabled || !settings.touch || !event.changedTouches.length) return;
-      const touch = event.changedTouches[0];
-      const deltaX = touch.clientX - this.touchStart.x;
-      const deltaY = touch.clientY - this.touchStart.y;
-      if (Math.abs(deltaX) > settings.threshold && Math.abs(deltaX) > Math.abs(deltaY)) {
-        event.preventDefault();
-      }
+      // Bypassed completely as all views are now vertically scrollable.
     }
 
     onTouchEnd(event) {
-      const settings = this.options.scrollNavigation;
-      if (!this.touchStart || !settings.enabled || !settings.touch || !event.changedTouches.length) {
-        this.touchStart = null;
-        return;
-      }
-
-      const touch = event.changedTouches[0];
-      const deltaX = touch.clientX - this.touchStart.x;
-      const deltaY = touch.clientY - this.touchStart.y;
       this.touchStart = null;
-
-      if (Math.abs(deltaX) < settings.threshold || Math.abs(deltaX) <= Math.abs(deltaY)) return;
-      this.moveView(deltaX < 0 ? 1 : -1);
     }
 
     onDocumentPointerDown(event) {
@@ -788,7 +1417,12 @@
     }
 
     moveActiveDate(days) {
-      const next = clampDate(addDays(this.activeDate, days), this.minDate, this.maxDate);
+      let next = clampDate(addDays(this.activeDate, days), this.minDate, this.maxDate);
+      if (next && this.isDisabled(next)) {
+        const today = stripTime(new Date());
+        next = clampDate(today, this.minDate, this.maxDate);
+        if (next && this.isDisabled(next)) next = null;
+      }
       if (!next) return;
       this.activeDate = next;
       this.viewDate = stripTime(next);
@@ -822,18 +1456,30 @@
     }
 
     isDisabled(date) {
+      if (this.disableFutureDates) {
+        const today = stripTime(new Date());
+        if (date > today) return true;
+      }
       return (this.minDate && date < this.minDate) || (this.maxDate && date > this.maxDate);
     }
 
     monthDisabled(date) {
       const first = localDate(date.getFullYear(), date.getMonth(), 1);
       const last = localDate(date.getFullYear(), date.getMonth() + 1, 0);
+      if (this.disableFutureDates) {
+        const today = stripTime(new Date());
+        if (first > today) return true;
+      }
       return (this.maxDate && first > this.maxDate) || (this.minDate && last < this.minDate);
     }
 
     yearDisabled(date) {
       const first = localDate(date.getFullYear(), 0, 1);
       const last = localDate(date.getFullYear(), 11, 31);
+      if (this.disableFutureDates) {
+        const today = stripTime(new Date());
+        if (first > today) return true;
+      }
       return (this.maxDate && first > this.maxDate) || (this.minDate && last < this.minDate);
     }
 
@@ -850,9 +1496,21 @@
       const start = (this.yearStart ?? this.viewDate.getFullYear()) + direction * 12;
       const first = localDate(start, 0, 1);
       const last = localDate(start + 11, 11, 31);
+      if (this.disableFutureDates) {
+        const today = stripTime(new Date());
+        if (first > today) return true;
+      }
       return (this.maxDate && first > this.maxDate) || (this.minDate && last < this.minDate);
     }
   }
 
   global.MSDatePicker = MSDatePicker;
+
+  // Process any queued languages registered before the core script loaded
+  if (global.MSDatePickerQueue && Array.isArray(global.MSDatePickerQueue)) {
+    global.MSDatePickerQueue.forEach(function (item) {
+      MSDatePicker.registerLanguage(item.code, item.language);
+    });
+    delete global.MSDatePickerQueue;
+  }
 })(window);
