@@ -27,42 +27,42 @@ The picker sets attached inputs to `readonly`, so users can open the calendar bu
 
 ```js
 new MSDatePicker(input, {
-  format: "DD-MM-YYYY",
-  language: "en",
-  theme: "auto",
-  showTodayButton: true,
-  scrollNavigation: {
-    enabled: true,
-    wheel: true,
-    touch: true,
-    threshold: 45,
-    wheelThrottle: 160,
+  format: "DD-MM-YYYY",                // Type: String (e.g. "MM/DD/YYYY", "D MMMM YYYY")
+  language: "en",                     // Type: String (e.g. "ka", "es")
+  theme: "auto",                      // Type: String ("auto" | "light" | "dark")
+  showTodayButton: true,              // Type: Boolean (true | false)
+  scrollNavigation: {                 // Type: Object | Boolean (false to disable)
+    enabled: true,                    // Type: Boolean
+    wheel: true,                      // Type: Boolean
+    touch: true,                      // Type: Boolean
+    threshold: 45,                    // Type: Number (scroll swipe threshold in pixels)
+    wheelThrottle: 160,               // Type: Number (mouse wheel throttle in ms)
   },
-  animations: {
-    enabled: true,
-    openDuration: 180,
-    closeDuration: 170,
-    viewDuration: 180,
-    zoomDuration: 160,
-    fadeDuration: 120,
-    selectDuration: 160,
-    easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+  animations: {                       // Type: Object | Boolean (false to disable)
+    enabled: true,                    // Type: Boolean
+    openDuration: 180,                // Type: Number (open animation duration in ms)
+    closeDuration: 170,               // Type: Number (close animation duration in ms)
+    viewDuration: 180,                // Type: Number (view slide animation duration in ms)
+    zoomDuration: 160,                // Type: Number (view zoom animation duration in ms)
+    fadeDuration: 120,                // Type: Number (view fade animation duration in ms)
+    selectDuration: 160,              // Type: Number (tile selection animation duration in ms)
+    easing: "cubic-bezier(0.16, 1, 0.3, 1)", // Type: String (CSS transition timing function)
   },
-  colors: {
-    selectedBackground: null,
-    selectedText: null,
-    background: null,
+  colors: {                           // Type: Object
+    selectedBackground: null,         // Type: String (hex or CSS color, e.g. "#16a34a")
+    selectedText: null,               // Type: String (hex or CSS color, e.g. "#ffffff")
+    background: null,                 // Type: String | Object (e.g. "#ffffff" or { light: "#ffffff", dark: "#2b2b2b" })
   },
-  defaultDate: null,
-  minDate: null,
-  maxDate: null,
-  disableFutureDates: false,
-  scrollBackLimitYears: null,
-  weekStartsOn: 1,
-  closeOnSelect: true,
-  locale: undefined,
-  appendTo: document.body,
-  onSelect(date, formattedValue, picker) {
+  defaultDate: null,                  // Type: Date | String | Number (initial date, e.g. new Date())
+  minDate: null,                      // Type: Date | String (minimum selectable date or "today") '01-01-2000'
+  maxDate: null,                      // Type: Date | String (maximum selectable date or "today") '01-01-2020'
+  disableFutureDates: false,          // Type: Boolean (prevent selecting future dates)
+  scrollBackLimitYears: null,         // Type: Number (limit history scrolling back in years, e.g. 10)
+  weekStartsOn: 1,                    // Type: Number (start day of week, 0 = Sunday, 1 = Monday, etc.)
+  closeOnSelect: true,                // Type: Boolean (automatically close popover on date select)
+  locale: undefined,                  // Type: String (browser BCP 47 locale override, e.g. "ka-GE")
+  appendTo: document.body,            // Type: HTMLElement (DOM container to append the popover)
+  onSelect(date, formattedValue, picker) { // Type: Function (callback when date is selected)
     console.log(date, formattedValue, picker);
   },
 });
