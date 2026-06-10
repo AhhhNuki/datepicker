@@ -31,6 +31,13 @@ new MSDatePicker(input, {
   language: "en",
   theme: "auto",
   showTodayButton: true,
+  scrollNavigation: {
+    enabled: true,
+    wheel: true,
+    touch: true,
+    threshold: 45,
+    wheelThrottle: 160,
+  },
   animations: {
     enabled: true,
     openDuration: 180,
@@ -100,6 +107,24 @@ new MSDatePicker(input, {
 
 new MSDatePicker(input, {
   animations: false,
+});
+```
+
+Wheel and touch swipe navigation are enabled by default. Scrolling down or swiping left moves forward; scrolling up or swiping right moves back.
+
+```js
+new MSDatePicker(input, {
+  scrollNavigation: {
+    enabled: true,
+    wheel: true,
+    touch: true,
+    threshold: 45,
+    wheelThrottle: 160,
+  },
+});
+
+new MSDatePicker(input, {
+  scrollNavigation: false,
 });
 ```
 

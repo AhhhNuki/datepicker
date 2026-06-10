@@ -34,6 +34,7 @@
   opacity: 0;
   transform: translateY(-8px) scale(0.985);
   transform-origin: top center;
+  will-change: opacity, transform;
   transition: opacity var(--msdp-close-duration) ease, transform var(--msdp-open-duration) var(--msdp-animation-easing);
 }
 
@@ -269,7 +270,7 @@
 @keyframes msdp-slide-forward {
   from {
     opacity: 0;
-    transform: translateX(18px);
+    transform: translateX(10px);
   }
 
   to {
@@ -281,7 +282,7 @@
 @keyframes msdp-slide-back {
   from {
     opacity: 0;
-    transform: translateX(-18px);
+    transform: translateX(-10px);
   }
 
   to {

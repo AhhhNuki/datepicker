@@ -7,6 +7,13 @@
     theme: "auto",
     colors: {},
     showTodayButton: true,
+    scrollNavigation: {
+      enabled: true,
+      wheel: true,
+      touch: true,
+      threshold: 45,
+      wheelThrottle: 160,
+    },
     animations: {
       enabled: true,
       openDuration: 180,
@@ -139,6 +146,21 @@
     };
   }
 
+  function normalizeScrollNavigation(value) {
+    const defaults = DEFAULT_OPTIONS.scrollNavigation;
+    if (value === false) return { ...defaults, enabled: false };
+    if (value === true || value == null) return { ...defaults };
+    return {
+      ...defaults,
+      ...value,
+      enabled: value.enabled !== false,
+      wheel: value.wheel !== false,
+      touch: value.touch !== false,
+      threshold: duration(value.threshold, defaults.threshold),
+      wheelThrottle: duration(value.wheelThrottle, defaults.wheelThrottle),
+    };
+  }
+
   function parseDate(value, format, locale) {
     if (!value) return null;
     if (isValidDate(value)) return stripTime(value);
@@ -261,6 +283,7 @@
       this.options.locale = this.options.locale || this.language.locale || "en";
       this.options.theme = normalizeTheme(this.options.theme);
       this.options.animations = normalizeAnimations(this.options.animations);
+      this.options.scrollNavigation = normalizeScrollNavigation(this.options.scrollNavigation);
       this.options.weekStartsOn = normalizeWeekStart(this.options.weekStartsOn);
       this.options.appendTo = this.options.appendTo || document.body;
       this.minDate = dateFromOption(this.options.minDate, this.options.format, this.options.locale);
@@ -272,6 +295,8 @@
       this.yearStart = null;
       this.isOpen = false;
       this.closeTimer = null;
+      this.lastWheelNavigation = 0;
+      this.touchStart = null;
       this.lastViewDate = stripTime(this.viewDate);
       this.lastView = this.view;
       this.previousReadOnly = this.input.readOnly;
@@ -288,6 +313,10 @@
       this.handleInputClick = this.open.bind(this);
       this.handleInputKeydown = this.onInputKeydown.bind(this);
       this.handlePopoverKeydown = this.onInputKeydown.bind(this);
+      this.handlePopoverWheel = this.onPopoverWheel.bind(this);
+      this.handleTouchStart = this.onTouchStart.bind(this);
+      this.handleTouchMove = this.onTouchMove.bind(this);
+      this.handleTouchEnd = this.onTouchEnd.bind(this);
       this.handleDocumentPointerDown = this.onDocumentPointerDown.bind(this);
       this.handleWindowChange = this.position.bind(this);
 
@@ -397,6 +426,10 @@
       this.input.removeEventListener("click", this.handleInputClick);
       this.input.removeEventListener("keydown", this.handleInputKeydown);
       this.popover.removeEventListener("keydown", this.handlePopoverKeydown);
+      this.popover.removeEventListener("wheel", this.handlePopoverWheel);
+      this.popover.removeEventListener("touchstart", this.handleTouchStart);
+      this.popover.removeEventListener("touchmove", this.handleTouchMove);
+      this.popover.removeEventListener("touchend", this.handleTouchEnd);
       this.input.readOnly = this.previousReadOnly;
       this.popover.remove();
       delete this.input.msDatePicker;
@@ -419,6 +452,10 @@
       this.popover.setAttribute("role", "dialog");
       this.popover.setAttribute("aria-modal", "false");
       this.popover.addEventListener("keydown", this.handlePopoverKeydown);
+      this.popover.addEventListener("wheel", this.handlePopoverWheel, { passive: false });
+      this.popover.addEventListener("touchstart", this.handleTouchStart, { passive: true });
+      this.popover.addEventListener("touchmove", this.handleTouchMove, { passive: false });
+      this.popover.addEventListener("touchend", this.handleTouchEnd);
       this.applyAppearanceOptions();
 
       this.header = document.createElement("div");
@@ -597,6 +634,9 @@
     }
 
     moveView(direction) {
+      if (this.view === VIEW_DAY && this.monthStepDisabled(direction)) return;
+      if (this.view === VIEW_MONTH && this.yearStepDisabled(direction)) return;
+      if (this.view === VIEW_YEAR && this.yearRangeStepDisabled(direction)) return;
       if (this.view === VIEW_DAY) this.viewDate = addMonths(this.viewDate, direction);
       if (this.view === VIEW_MONTH) this.viewDate = localDate(this.viewDate.getFullYear() + direction, this.viewDate.getMonth(), 1);
       if (this.view === VIEW_YEAR) this.viewDate = localDate(this.viewDate.getFullYear() + direction * 12, this.viewDate.getMonth(), 1);
@@ -684,6 +724,62 @@
         event.preventDefault();
         this.close();
       }
+    }
+
+    onPopoverWheel(event) {
+      const settings = this.options.scrollNavigation;
+      if (!this.isOpen || !settings.enabled || !settings.wheel) return;
+
+      const horizontal = Math.abs(event.deltaX) > Math.abs(event.deltaY);
+      const delta = horizontal ? event.deltaX : event.deltaY;
+      if (Math.abs(delta) < settings.threshold) return;
+
+      const now = Date.now();
+      if (now - this.lastWheelNavigation < settings.wheelThrottle) {
+        event.preventDefault();
+        return;
+      }
+
+      event.preventDefault();
+      this.lastWheelNavigation = now;
+      this.moveView(delta > 0 ? 1 : -1);
+    }
+
+    onTouchStart(event) {
+      const settings = this.options.scrollNavigation;
+      if (!this.isOpen || !settings.enabled || !settings.touch || !event.changedTouches.length) return;
+      const touch = event.changedTouches[0];
+      this.touchStart = {
+        x: touch.clientX,
+        y: touch.clientY,
+      };
+    }
+
+    onTouchMove(event) {
+      const settings = this.options.scrollNavigation;
+      if (!this.touchStart || !settings.enabled || !settings.touch || !event.changedTouches.length) return;
+      const touch = event.changedTouches[0];
+      const deltaX = touch.clientX - this.touchStart.x;
+      const deltaY = touch.clientY - this.touchStart.y;
+      if (Math.abs(deltaX) > settings.threshold && Math.abs(deltaX) > Math.abs(deltaY)) {
+        event.preventDefault();
+      }
+    }
+
+    onTouchEnd(event) {
+      const settings = this.options.scrollNavigation;
+      if (!this.touchStart || !settings.enabled || !settings.touch || !event.changedTouches.length) {
+        this.touchStart = null;
+        return;
+      }
+
+      const touch = event.changedTouches[0];
+      const deltaX = touch.clientX - this.touchStart.x;
+      const deltaY = touch.clientY - this.touchStart.y;
+      this.touchStart = null;
+
+      if (Math.abs(deltaX) < settings.threshold || Math.abs(deltaX) <= Math.abs(deltaY)) return;
+      this.moveView(deltaX < 0 ? 1 : -1);
     }
 
     onDocumentPointerDown(event) {
