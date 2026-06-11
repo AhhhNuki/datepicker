@@ -31,6 +31,10 @@
     scrollBackLimitYears: null,
     weekStartsOn: 1,
     closeOnSelect: true,
+    icons: {
+      prev: null,
+      next: null,
+    },
     appendTo: null,
     locale: undefined,
     onSelect: null,
@@ -502,9 +506,12 @@
       this.header = document.createElement("div");
       this.header.className = "msdp-header";
 
+      const prevIcon = this.options.icons?.prev || "<";
+      const nextIcon = this.options.icons?.next || ">";
+
       this.titleButton = this.button("msdp-button msdp-title", "", () => this.cycleView());
-      this.prevButton = this.button("msdp-button msdp-nav", "<", () => this.moveView(-1));
-      this.nextButton = this.button("msdp-button msdp-nav", ">", () => this.moveView(1));
+      this.prevButton = this.button("msdp-button msdp-nav", prevIcon, () => this.moveView(-1), true);
+      this.nextButton = this.button("msdp-button msdp-nav", nextIcon, () => this.moveView(1), true);
       this.prevButton.type = "button";
       this.nextButton.type = "button";
       this.prevButton.setAttribute("aria-label", this.language.labels.previous);
@@ -541,6 +548,9 @@
       const selectedBackground = colors.selectedBackground || colors.selectedDateBackground || colors.selectedBackgroundColor;
       const selectedText = colors.selectedText || colors.selectedDateText || colors.selectedTextColor;
       const calendarBackground = colors.background || colors.calendarBackground || colors.calendarBackgroundColor;
+      const buttonHover = colors.hover || colors.buttonHover || colors.hoverBackground || colors.buttonHoverBackground;
+      const outsideText = colors.outsideText || colors.outsideTextColor || colors.outsideColor || colors.outsideDaysText || colors.outsideDaysColor;
+      const outsideOpacity = colors.outsideOpacity !== undefined && colors.outsideOpacity !== null ? colors.outsideOpacity : colors.outsideDaysOpacity;
 
       if (selectedBackground) this.popover.style.setProperty("--msdp-active", selectedBackground);
       if (selectedText) this.popover.style.setProperty("--msdp-active-text", selectedText);
@@ -552,6 +562,27 @@
           this.popover.style.setProperty("--msdp-bg-light", calendarBackground);
           this.popover.style.setProperty("--msdp-bg-dark", calendarBackground);
         }
+      }
+      if (buttonHover) {
+        if (typeof buttonHover === "object") {
+          if (buttonHover.light) this.popover.style.setProperty("--msdp-hover-light", buttonHover.light);
+          if (buttonHover.dark) this.popover.style.setProperty("--msdp-hover-dark", buttonHover.dark);
+        } else {
+          this.popover.style.setProperty("--msdp-hover-light", buttonHover);
+          this.popover.style.setProperty("--msdp-hover-dark", buttonHover);
+        }
+      }
+      if (outsideText) {
+        if (typeof outsideText === "object") {
+          if (outsideText.light) this.popover.style.setProperty("--msdp-outside-text-light", outsideText.light);
+          if (outsideText.dark) this.popover.style.setProperty("--msdp-outside-text-dark", outsideText.dark);
+        } else {
+          this.popover.style.setProperty("--msdp-outside-text-light", outsideText);
+          this.popover.style.setProperty("--msdp-outside-text-dark", outsideText);
+        }
+      }
+      if (outsideOpacity !== undefined && outsideOpacity !== null) {
+        this.popover.style.setProperty("--msdp-outside-opacity", outsideOpacity);
       }
 
       if (!this.options.animations.enabled) {
@@ -567,18 +598,107 @@
       this.popover.style.setProperty("--msdp-animation-easing", this.options.animations.easing);
     }
 
-    button(className, text, onClick) {
+    button(className, content, onClick, isIcon = false) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = className;
-      button.textContent = text;
+
+      if (isIcon && typeof content === "string") {
+        if (content.trim().startsWith("<")) {
+          button.innerHTML = content;
+        } else if (content === ">" || content === "<") {
+          button.textContent = content;
+        } else {
+          // Treat as class names for <i> tag font icon
+          const icon = document.createElement("i");
+          icon.className = content;
+          button.appendChild(icon);
+        }
+      } else if (content instanceof HTMLElement) {
+        button.appendChild(content);
+      } else {
+        button.textContent = String(content);
+      }
+
       button.addEventListener("click", onClick);
       return button;
+    }
+
+    updateOutsideDays() {
+      if (this.view !== VIEW_DAY) return;
+      const currentMonth = this.viewDate.getMonth();
+      const currentYear = this.viewDate.getFullYear();
+      const dayButtons = this.body.querySelectorAll(".msdp-day");
+      dayButtons.forEach((btn) => {
+        const y = parseInt(btn.dataset.year, 10);
+        const m = parseInt(btn.dataset.month, 10);
+        if (y === currentYear && m === currentMonth) {
+          btn.classList.remove("is-outside");
+        } else {
+          btn.classList.add("is-outside");
+        }
+      });
+    }
+
+    updateOutsideMonths() {
+      if (this.view !== VIEW_MONTH) return;
+      const currentYear = this.viewDate.getFullYear();
+      const monthTiles = this.body.querySelectorAll(".msdp-tile");
+      monthTiles.forEach((tile) => {
+        const y = parseInt(tile.dataset.year, 10);
+        if (y === currentYear) {
+          tile.classList.remove("is-outside");
+        } else {
+          tile.classList.add("is-outside");
+        }
+      });
+    }
+
+    updateOutsideYears() {
+      if (this.view !== VIEW_YEAR) return;
+      const decadeStart = this.viewDate.getFullYear() - (this.viewDate.getFullYear() % 10);
+      const yearTiles = this.body.querySelectorAll(".msdp-tile");
+      yearTiles.forEach((tile) => {
+        const y = parseInt(tile.dataset.year, 10);
+        if (y >= decadeStart && y < decadeStart + 10) {
+          tile.classList.remove("is-outside");
+        } else {
+          tile.classList.add("is-outside");
+        }
+      });
+    }
+
+    getMonthWeeks(year, month) {
+      const weeks = [];
+      const first = localDate(year, month, 1);
+      const offset = (first.getDay() - this.options.weekStartsOn + 7) % 7;
+      let currentWeekStart = addDays(first, -offset);
+      
+      const thursdayOffset = (4 - this.options.weekStartsOn + 7) % 7;
+      const firstThursday = addDays(currentWeekStart, thursdayOffset);
+      if (firstThursday.getMonth() !== month) {
+        currentWeekStart = addDays(currentWeekStart, 7);
+      }
+      
+      while (true) {
+        const thursday = addDays(currentWeekStart, thursdayOffset);
+        if (thursday.getMonth() !== month) {
+          break;
+        }
+        weeks.push(new Date(currentWeekStart));
+        currentWeekStart = addDays(currentWeekStart, 7);
+      }
+      return weeks;
     }
 
     render() {
       if (this.todayButton) this.todayButton.disabled = this.isDisabled(stripTime(new Date()));
       
+      this.popover.classList.remove("msdp-view-day", "msdp-view-month", "msdp-view-year");
+      if (this.view === VIEW_DAY) this.popover.classList.add("msdp-view-day");
+      if (this.view === VIEW_MONTH) this.popover.classList.add("msdp-view-month");
+      if (this.view === VIEW_YEAR) this.popover.classList.add("msdp-view-year");
+
       const animClass = this.transitionClass();
 
       if (this.view === VIEW_DAY) this.renderDays();
@@ -620,7 +740,6 @@
       // Clear body
       this.body.replaceChildren();
 
-      this.weekdays.style.visibility = "";
       this.weekdays.replaceChildren(...weekdayNames(this.options.locale, this.options.weekStartsOn, this.language).map((name) => {
         const day = document.createElement("div");
         day.textContent = name;
@@ -676,40 +795,32 @@
       section.dataset.year = date.getFullYear();
       section.dataset.month = date.getMonth();
 
-      const header = document.createElement("div");
-      header.className = "msdp-month-header";
-      
-      let monthName = "";
-      if (this.language && this.language.months && this.language.months.long) {
-        monthName = this.language.months.long[date.getMonth()];
-      } else {
-        const monthFormatter = new Intl.DateTimeFormat(this.options.locale, { month: "long" });
-        monthName = monthFormatter.format(date);
-      }
-      header.textContent = `${monthName} ${date.getFullYear()}`;
-      section.appendChild(header);
-
       const grid = document.createElement("div");
       grid.className = "msdp-days";
       grid.setAttribute("role", "grid");
 
-      const firstOfMonth = localDate(date.getFullYear(), date.getMonth(), 1);
-      const offset = (firstOfMonth.getDay() - this.options.weekStartsOn + 7) % 7;
-      const start = addDays(firstOfMonth, -offset);
+      const weeks = this.getMonthWeeks(date.getFullYear(), date.getMonth());
 
-      for (let index = 0; index < 42; index += 1) {
-        const d = addDays(start, index);
-        const day = this.button("msdp-day", String(d.getDate()), () => this.selectDate(d));
-        day.setAttribute("role", "gridcell");
-        day.setAttribute("aria-label", new Intl.DateTimeFormat(this.options.locale, { dateStyle: "full" }).format(d));
-        day.disabled = this.isDisabled(d);
-        if (!sameMonth(d, date)) day.classList.add("is-outside");
-        if (sameDay(d, new Date())) day.classList.add("is-today");
-        if (sameDay(d, this.selectedDate)) day.classList.add("is-selected");
-        if (sameDay(d, this.activeDate)) day.tabIndex = 0;
-        else day.tabIndex = -1;
-        grid.appendChild(day);
-      }
+      const { minLimit, maxLimit } = this.getScrollLimits();
+      weeks.forEach((weekStart) => {
+        for (let i = 0; i < 7; i++) {
+          const d = addDays(weekStart, i);
+          const day = this.button("msdp-day", String(d.getDate()), () => this.selectDate(d));
+          day.setAttribute("role", "gridcell");
+          day.setAttribute("aria-label", new Intl.DateTimeFormat(this.options.locale, { dateStyle: "full" }).format(d));
+          day.disabled = this.isDisabled(d);
+          day.dataset.year = d.getFullYear();
+          day.dataset.month = d.getMonth();
+          if (sameDay(d, new Date())) day.classList.add("is-today");
+          if (sameDay(d, this.selectedDate)) day.classList.add("is-selected");
+          if (sameDay(d, this.activeDate)) day.tabIndex = 0;
+          else day.tabIndex = -1;
+          if ((minLimit && d < minLimit) || (maxLimit && d > maxLimit)) {
+            day.classList.add("is-hidden");
+          }
+          grid.appendChild(day);
+        }
+      });
 
       section.appendChild(grid);
       return section;
@@ -718,6 +829,7 @@
     scrollToMonth(date, smooth = true) {
       const match = this.monthElements.find(item => item.date.getFullYear() === date.getFullYear() && item.date.getMonth() === date.getMonth());
       if (match) {
+        this.viewDate = new Date(date);
         this.isProgrammaticScrolling = true;
         const doScroll = () => {
           this.body.scrollTo({
@@ -734,6 +846,9 @@
           doScroll();
         }
         this.updateHeaderTitle(date);
+        this.prevButton.disabled = this.monthStepDisabled(-1);
+        this.nextButton.disabled = this.monthStepDisabled(1);
+        this.updateOutsideDays();
       }
     }
 
@@ -766,22 +881,32 @@
       const bodyTop = bodyRect.top;
       
       let bestMatch = null;
-      let minDiff = Infinity;
 
-      this.monthElements.forEach(item => {
-        const rect = item.element.getBoundingClientRect();
-        const diff = Math.abs(rect.top - bodyTop);
-        if (diff < minDiff) {
-          minDiff = diff;
-          bestMatch = item;
-        }
-      });
+      const isAtBottom = this.body.scrollTop + this.body.clientHeight >= this.body.scrollHeight - 5;
+      const isAtTop = this.body.scrollTop === 0;
+
+      if (isAtBottom && this.monthElements.length > 0) {
+        bestMatch = this.monthElements[this.monthElements.length - 1];
+      } else if (isAtTop && this.monthElements.length > 0) {
+        bestMatch = this.monthElements[0];
+      } else {
+        let minDiff = Infinity;
+        this.monthElements.forEach(item => {
+          const rect = item.element.getBoundingClientRect();
+          const diff = Math.abs(rect.top - bodyTop);
+          if (diff < minDiff) {
+            minDiff = diff;
+            bestMatch = item;
+          }
+        });
+      }
 
       if (bestMatch && (this.viewDate.getFullYear() !== bestMatch.date.getFullYear() || this.viewDate.getMonth() !== bestMatch.date.getMonth())) {
         this.viewDate = new Date(bestMatch.date);
         this.updateHeaderTitle(this.viewDate);
         this.prevButton.disabled = this.monthStepDisabled(-1);
         this.nextButton.disabled = this.monthStepDisabled(1);
+        this.updateOutsideDays();
       }
 
       const scrollTop = this.body.scrollTop;
@@ -858,22 +983,32 @@
       const bodyTop = bodyRect.top;
       
       let bestMatch = null;
-      let minDiff = Infinity;
 
-      this.yearElements.forEach(item => {
-        const rect = item.element.getBoundingClientRect();
-        const diff = Math.abs(rect.top - bodyTop);
-        if (diff < minDiff) {
-          minDiff = diff;
-          bestMatch = item;
-        }
-      });
+      const isAtBottom = this.body.scrollTop + this.body.clientHeight >= this.body.scrollHeight - 5;
+      const isAtTop = this.body.scrollTop === 0;
+
+      if (isAtBottom && this.yearElements.length > 0) {
+        bestMatch = this.yearElements[this.yearElements.length - 1];
+      } else if (isAtTop && this.yearElements.length > 0) {
+        bestMatch = this.yearElements[0];
+      } else {
+        let minDiff = Infinity;
+        this.yearElements.forEach(item => {
+          const rect = item.element.getBoundingClientRect();
+          const diff = Math.abs(rect.top - bodyTop);
+          if (diff < minDiff) {
+            minDiff = diff;
+            bestMatch = item;
+          }
+        });
+      }
 
       if (bestMatch && this.viewDate.getFullYear() !== bestMatch.year) {
         this.viewDate = localDate(bestMatch.year, this.viewDate.getMonth(), 1);
         this.updateHeaderTitleMonths(this.viewDate);
         this.prevButton.disabled = this.yearStepDisabled(-1);
         this.nextButton.disabled = this.yearStepDisabled(1);
+        this.updateOutsideMonths();
       }
 
       const scrollTop = this.body.scrollTop;
@@ -950,23 +1085,63 @@
       const bodyTop = bodyRect.top;
       
       let bestMatch = null;
-      let minDiff = Infinity;
 
-      this.rangeElements.forEach(item => {
-        const rect = item.element.getBoundingClientRect();
-        const diff = Math.abs(rect.top - bodyTop);
-        if (diff < minDiff) {
-          minDiff = diff;
-          bestMatch = item;
-        }
-      });
+      const isAtBottom = this.body.scrollTop + this.body.clientHeight >= this.body.scrollHeight - 5;
+      const isAtTop = this.body.scrollTop === 0;
 
-      if (bestMatch && (this.viewDate.getFullYear() < bestMatch.startYear || this.viewDate.getFullYear() >= bestMatch.startYear + 12)) {
-        this.viewDate = localDate(bestMatch.startYear, this.viewDate.getMonth(), 1);
+      if (isAtBottom && this.rangeElements.length > 0) {
+        bestMatch = this.rangeElements[this.rangeElements.length - 1];
+      } else if (isAtTop && this.rangeElements.length > 0) {
+        bestMatch = this.rangeElements[0];
+      } else {
+        let minDiff = Infinity;
+        this.rangeElements.forEach(item => {
+          const rect = item.element.getBoundingClientRect();
+          const diff = Math.abs(rect.top - bodyTop);
+          if (diff < minDiff) {
+            minDiff = diff;
+            bestMatch = item;
+          }
+        });
+      }
+
+      if (bestMatch) {
         this.yearStart = bestMatch.startYear;
-        this.updateHeaderTitleYears(bestMatch.startYear);
-        this.prevButton.disabled = this.yearRangeStepDisabled(-1);
-        this.nextButton.disabled = this.yearRangeStepDisabled(1);
+      }
+
+      let closestTile = null;
+      const tiles = Array.from(this.body.querySelectorAll(".msdp-tile")).filter(tile => !tile.classList.contains("is-hidden"));
+
+      if (isAtBottom && tiles.length > 0) {
+        closestTile = tiles[tiles.length - 1];
+      } else if (isAtTop && tiles.length > 0) {
+        closestTile = tiles[0];
+      } else {
+        let minTileDiff = Infinity;
+        const bodyCenter = bodyRect.top + bodyRect.height / 2;
+        tiles.forEach((tile) => {
+          const rect = tile.getBoundingClientRect();
+          const tileCenter = rect.top + rect.height / 2;
+          const diff = Math.abs(tileCenter - bodyCenter);
+          if (diff < minTileDiff) {
+            minTileDiff = diff;
+            closestTile = tile;
+          }
+        });
+      }
+
+      if (closestTile) {
+        const centerYear = parseInt(closestTile.dataset.year, 10);
+        const currentDecadeStart = this.viewDate.getFullYear() - (this.viewDate.getFullYear() % 10);
+        const targetDecadeStart = centerYear - (centerYear % 10);
+
+        if (currentDecadeStart !== targetDecadeStart) {
+          this.viewDate = localDate(targetDecadeStart, this.viewDate.getMonth(), 1);
+          this.updateHeaderTitleYears();
+          this.prevButton.disabled = this.yearRangeStepDisabled(-1);
+          this.nextButton.disabled = this.yearRangeStepDisabled(1);
+          this.updateOutsideYears();
+        }
       }
 
       const scrollTop = this.body.scrollTop;
@@ -981,7 +1156,7 @@
 
         if (minLimit) {
           const limitYear = minLimit.getFullYear();
-          const limitRangeStart = limitYear - (limitYear % 12);
+          const limitRangeStart = this.getYearRangeStart(limitYear);
           if (currentStart < limitRangeStart) {
             currentStart = limitRangeStart;
           }
@@ -1019,7 +1194,7 @@
 
         if (maxLimit) {
           const limitYear = maxLimit.getFullYear();
-          const limitRangeStart = limitYear - (limitYear % 12);
+          const limitRangeStart = this.getYearRangeStart(limitYear);
           if (endStart > limitRangeStart) {
             endStart = limitRangeStart;
           }
@@ -1044,7 +1219,6 @@
       this.body.replaceChildren();
       this.titleButton.textContent = String(this.viewDate.getFullYear());
       this.titleButton.setAttribute("aria-label", this.language.labels.chooseYear);
-      this.weekdays.style.visibility = "hidden";
 
       this.renderedYearsStart = this.viewDate.getFullYear() - 4;
       this.renderedYearsEnd = this.viewDate.getFullYear() + 4;
@@ -1088,14 +1262,10 @@
       section.className = "msdp-year-section";
       section.dataset.year = year;
 
-      const header = document.createElement("div");
-      header.className = "msdp-year-header";
-      header.textContent = String(year);
-      section.appendChild(header);
-
       const grid = document.createElement("div");
       grid.className = "msdp-grid";
 
+      const { minLimit, maxLimit } = this.getScrollLimits();
       const names = monthNames(this.options.locale, "short", this.language);
       names.forEach((name, month) => {
         const date = localDate(year, month, 1);
@@ -1104,10 +1274,24 @@
           this.view = VIEW_DAY;
           this.render();
         });
+        tile.dataset.year = year;
+        tile.dataset.month = month;
         if (this.selectedDate && this.selectedDate.getFullYear() === year && this.selectedDate.getMonth() === month) {
           tile.classList.add("is-selected");
         }
         tile.disabled = this.monthDisabled(date);
+        if (minLimit) {
+          const firstOfMinLimit = localDate(minLimit.getFullYear(), minLimit.getMonth(), 1);
+          if (date < firstOfMinLimit) {
+            tile.classList.add("is-hidden");
+          }
+        }
+        if (maxLimit) {
+          const firstOfMaxLimit = localDate(maxLimit.getFullYear(), maxLimit.getMonth(), 1);
+          if (date > firstOfMaxLimit) {
+            tile.classList.add("is-hidden");
+          }
+        }
         grid.appendChild(tile);
       });
 
@@ -1118,6 +1302,7 @@
     scrollToYear(year, smooth = true) {
       const match = this.yearElements.find(item => item.year === year);
       if (match) {
+        this.viewDate = localDate(year, this.viewDate.getMonth(), 1);
         this.isProgrammaticScrolling = true;
         const doScroll = () => {
           this.body.scrollTo({
@@ -1134,6 +1319,9 @@
           doScroll();
         }
         this.updateHeaderTitleMonths(this.viewDate);
+        this.prevButton.disabled = this.yearStepDisabled(-1);
+        this.nextButton.disabled = this.yearStepDisabled(1);
+        this.updateOutsideMonths();
       }
     }
 
@@ -1145,10 +1333,8 @@
     renderYears() {
       this.body.replaceChildren();
       const currentYear = this.viewDate.getFullYear();
-      this.yearStart = currentYear - (currentYear % 12);
-      this.titleButton.textContent = `${this.yearStart} - ${this.yearStart + 11}`;
-      this.titleButton.setAttribute("aria-label", this.language.labels.chooseDate);
-      this.weekdays.style.visibility = "hidden";
+      this.yearStart = this.getYearRangeStart(currentYear);
+      this.updateHeaderTitleYears();
 
       const currentRangeStart = this.yearStart;
       this.renderedRangesStart = currentRangeStart - 36;
@@ -1157,12 +1343,12 @@
       const { minLimit, maxLimit } = this.getScrollLimits();
       if (minLimit) {
         const limitYear = minLimit.getFullYear();
-        const limitRangeStart = limitYear - (limitYear % 12);
+        const limitRangeStart = this.getYearRangeStart(limitYear);
         if (this.renderedRangesStart < limitRangeStart) this.renderedRangesStart = limitRangeStart;
       }
       if (maxLimit) {
         const limitYear = maxLimit.getFullYear();
-        const limitRangeStart = limitYear - (limitYear % 12);
+        const limitRangeStart = this.getYearRangeStart(limitYear);
         if (this.renderedRangesEnd > limitRangeStart) this.renderedRangesEnd = limitRangeStart;
       }
       if (this.renderedRangesStart > this.renderedRangesEnd) {
@@ -1195,14 +1381,10 @@
       section.className = "msdp-year-range-section";
       section.dataset.startYear = startYear;
 
-      const header = document.createElement("div");
-      header.className = "msdp-year-range-header";
-      header.textContent = `${startYear} - ${startYear + 11}`;
-      section.appendChild(header);
-
       const grid = document.createElement("div");
       grid.className = "msdp-grid";
 
+      const { minLimit, maxLimit } = this.getScrollLimits();
       for (let index = 0; index < 12; index += 1) {
         const year = startYear + index;
         const date = localDate(year, this.viewDate.getMonth(), 1);
@@ -1211,10 +1393,14 @@
           this.view = VIEW_MONTH;
           this.render();
         });
+        tile.dataset.year = year;
         if (this.selectedDate && this.selectedDate.getFullYear() === year) {
           tile.classList.add("is-selected");
         }
         tile.disabled = this.yearDisabled(date);
+        if ((minLimit && year < minLimit.getFullYear()) || (maxLimit && year > maxLimit.getFullYear())) {
+          tile.classList.add("is-hidden");
+        }
         grid.appendChild(tile);
       }
 
@@ -1225,6 +1411,10 @@
     scrollToYearRange(startYear, smooth = true) {
       const match = this.rangeElements.find(item => item.startYear === startYear);
       if (match) {
+        this.yearStart = startYear;
+        if (this.viewDate.getFullYear() < startYear || this.viewDate.getFullYear() >= startYear + 12) {
+          this.viewDate = localDate(startYear, this.viewDate.getMonth(), 1);
+        }
         this.isProgrammaticScrolling = true;
         const doScroll = () => {
           this.body.scrollTo({
@@ -1240,12 +1430,33 @@
         } else {
           doScroll();
         }
-        this.updateHeaderTitleYears(startYear);
+        this.updateHeaderTitleYears();
+        this.prevButton.disabled = this.yearRangeStepDisabled(-1);
+        this.nextButton.disabled = this.yearRangeStepDisabled(1);
+        this.updateOutsideYears();
       }
     }
 
-    updateHeaderTitleYears(startYear) {
-      this.titleButton.textContent = `${startYear} - ${startYear + 11}`;
+    updateHeaderTitleYears() {
+      const decadeStart = this.viewDate.getFullYear() - (this.viewDate.getFullYear() % 10);
+      let start = decadeStart;
+      let end = decadeStart + 9;
+
+      const { minLimit, maxLimit } = this.getScrollLimits();
+      if (minLimit) {
+        const minYear = minLimit.getFullYear();
+        if (start < minYear) {
+          start = minYear;
+        }
+      }
+      if (maxLimit) {
+        const maxYear = maxLimit.getFullYear();
+        if (end > maxYear) {
+          end = maxYear;
+        }
+      }
+
+      this.titleButton.textContent = `${start} - ${end}`;
       this.titleButton.setAttribute("aria-label", this.language.labels.chooseDate);
     }
 
@@ -1279,8 +1490,8 @@
           this.scrollToYear(this.viewDate.getFullYear(), true);
         }
       } else if (this.view === VIEW_YEAR) {
-        this.viewDate = localDate(this.viewDate.getFullYear() + direction * 12, this.viewDate.getMonth(), 1);
-        const currentRangeStart = this.viewDate.getFullYear() - (this.viewDate.getFullYear() % 12);
+        this.viewDate = localDate(this.viewDate.getFullYear() + direction * 10, this.viewDate.getMonth(), 1);
+        const currentRangeStart = this.getYearRangeStart(this.viewDate.getFullYear());
         if (!this.renderedRangesStart || !this.renderedRangesEnd || currentRangeStart < this.renderedRangesStart || currentRangeStart > this.renderedRangesEnd) {
           this.renderedRangesStart = currentRangeStart - 36;
           this.renderedRangesEnd = currentRangeStart + 36;
@@ -1455,6 +1666,16 @@
       this.popover.style.left = `${Math.max(window.scrollX + 8, left)}px`;
     }
 
+    getYearRangeStart(year) {
+      const { minLimit } = this.getScrollLimits();
+      if (minLimit) {
+        const offset = minLimit.getFullYear();
+        if (year < offset) return offset;
+        return offset + Math.floor((year - offset) / 12) * 12;
+      }
+      return year - (year % 12);
+    }
+
     isDisabled(date) {
       const { minLimit, maxLimit } = this.getScrollLimits();
       return (minLimit && date < minLimit) || (maxLimit && date > maxLimit);
@@ -1484,9 +1705,10 @@
     }
 
     yearRangeStepDisabled(direction) {
-      const start = (this.yearStart ?? this.viewDate.getFullYear()) + direction * 12;
-      const first = localDate(start, 0, 1);
-      const last = localDate(start + 11, 11, 31);
+      const decadeStart = this.viewDate.getFullYear() - (this.viewDate.getFullYear() % 10);
+      const targetDecadeStart = decadeStart + direction * 10;
+      const first = localDate(targetDecadeStart, 0, 1);
+      const last = localDate(targetDecadeStart + 9, 11, 31);
       const { minLimit, maxLimit } = this.getScrollLimits();
       return (maxLimit && first > maxLimit) || (minLimit && last < minLimit);
     }

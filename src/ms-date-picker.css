@@ -6,7 +6,13 @@
   --msdp-text: #1f1f1f;
   --msdp-muted: #666666;
   --msdp-border: #d7d7d7;
-  --msdp-hover: #ececec;
+  --msdp-hover-light: #ececec;
+  --msdp-hover-dark: #3a3a3a;
+  --msdp-hover: var(--msdp-hover-light);
+  --msdp-outside-text-light: #666666;
+  --msdp-outside-text-dark: #b8b8b8;
+  --msdp-outside-text: var(--msdp-outside-text-light);
+  --msdp-outside-opacity: 0.4;
   --msdp-active: #0067c0;
   --msdp-active-text: #ffffff;
   --msdp-focus: #111111;
@@ -169,9 +175,18 @@
   outline-offset: -2px;
 }
 
-.msdp-day.is-outside {
-  color: var(--msdp-muted);
+.msdp-day.is-outside,
+.msdp-tile.is-outside {
+  color: var(--msdp-outside-text);
+  opacity: var(--msdp-outside-opacity);
 }
+
+.msdp-day.is-hidden,
+.msdp-tile.is-hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 
 .msdp-day.is-today::after {
   content: "";
@@ -351,7 +366,8 @@
     --msdp-text: #f3f3f3;
     --msdp-muted: #b8b8b8;
     --msdp-border: #515151;
-    --msdp-hover: #3a3a3a;
+    --msdp-hover: var(--msdp-hover-dark);
+    --msdp-outside-text: var(--msdp-outside-text-dark);
     --msdp-active: #4cc2ff;
     --msdp-active-text: #003047;
     --msdp-focus: #ffffff;
@@ -366,7 +382,8 @@
   --msdp-text: #1f1f1f;
   --msdp-muted: #666666;
   --msdp-border: #d7d7d7;
-  --msdp-hover: #ececec;
+  --msdp-hover: var(--msdp-hover-light);
+  --msdp-outside-text: var(--msdp-outside-text-light);
   --msdp-active: #0067c0;
   --msdp-active-text: #ffffff;
   --msdp-focus: #111111;
@@ -380,7 +397,8 @@
   --msdp-text: #f3f3f3;
   --msdp-muted: #b8b8b8;
   --msdp-border: #515151;
-  --msdp-hover: #3a3a3a;
+  --msdp-hover: var(--msdp-hover-dark);
+  --msdp-outside-text: var(--msdp-outside-text-dark);
   --msdp-active: #4cc2ff;
   --msdp-active-text: #003047;
   --msdp-focus: #ffffff;
@@ -430,8 +448,8 @@
 }
 
 .msdp-month-section {
-  padding-bottom: 12px;
-  border-bottom: 1px dashed var(--msdp-border);
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
 .msdp-month-section:last-child {
@@ -440,19 +458,13 @@
 }
 
 .msdp-month-header {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--msdp-muted);
-  padding: 8px 10px 4px;
-  text-align: left;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
+  display: none;
 }
 
 .msdp-year-section,
 .msdp-year-range-section {
-  padding-bottom: 12px;
-  border-bottom: 1px dashed var(--msdp-border);
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
 .msdp-year-section:last-child,
@@ -463,11 +475,17 @@
 
 .msdp-year-header,
 .msdp-year-range-header {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--msdp-muted);
-  padding: 8px 10px 4px;
-  text-align: left;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
+  display: none;
 }
+
+/* View specific layout adjustments to hide weekdays and increase body height in month/year views */
+.msdp-popover.msdp-view-month .msdp-weekdays,
+.msdp-popover.msdp-view-year .msdp-weekdays {
+  display: none;
+}
+
+.msdp-popover.msdp-view-month .msdp-body,
+.msdp-popover.msdp-view-year .msdp-body {
+  height: 284px; /* 252px + 32px to keep total popover height exactly constant */
+}
+
