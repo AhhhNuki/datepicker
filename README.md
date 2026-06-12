@@ -52,6 +52,9 @@ new MSDatePicker(input, {
     selectedBackground: null,         // Type: String (hex or CSS color, e.g. "#16a34a")
     selectedText: null,               // Type: String (hex or CSS color, e.g. "#ffffff")
     background: null,                 // Type: String | Object (e.g. "#ffffff" or { light: "#ffffff", dark: "#2b2b2b" })
+    hover: null,                      // Type: String | Object (e.g. "#ececec" or { light: "#ececec", dark: "#3a3a3a" })
+    outsideText: null,                // Type: String | Object (e.g. "#666666" or { light: "#666666", dark: "#b8b8b8" })
+    outsideOpacity: 0.4,              // Type: Number (opacity for outside dates, e.g. 0.35)
   },
   defaultDate: null,                  // Type: Date | String | Number (initial date, e.g. new Date())
   minDate: null,                      // Type: Date | String (minimum selectable date or "today") '01-01-2000'
@@ -60,6 +63,10 @@ new MSDatePicker(input, {
   scrollBackLimitYears: null,         // Type: Number (limit history scrolling back in years, e.g. 10)
   weekStartsOn: 1,                    // Type: Number (start day of week, 0 = Sunday, 1 = Monday, etc.)
   closeOnSelect: true,                // Type: Boolean (automatically close popover on date select)
+  icons: {                            // Type: Object
+    prev: null,                       // Type: String | HTMLElement (e.g. "fa fa-chevron-left" or '<i class="fa fa-chevron-left"></i>')
+    next: null,                       // Type: String | HTMLElement (e.g. "fa fa-chevron-right" or '<i class="fa fa-chevron-right"></i>')
+  },
   locale: undefined,                  // Type: String (browser BCP 47 locale override, e.g. "ka-GE")
   appendTo: document.body,            // Type: HTMLElement (DOM container to append the popover)
   onSelect(date, formattedValue, picker) { // Type: Function (callback when date is selected)
@@ -100,7 +107,19 @@ new MSDatePicker(input, {
     background: {
       light: "#ffffff",
       dark: "#1e293b"
-    }
+    },
+    // Customize button/day hover colors (supports light and dark themes)
+    hover: {
+      light: "#e2e8f0",
+      dark: "#334155"
+    },
+    // Customize color of adjacent/outside month days
+    outsideText: {
+      light: "#767676",
+      dark: "#8a8a8a"
+    },
+    // Customize opacity of adjacent/outside month days (defaults to 0.4)
+    outsideOpacity: 0.35
   },
 });
 ```
@@ -155,6 +174,17 @@ new MSDatePicker(input, {
 
 new MSDatePicker(input, {
   animations: false,
+});
+```
+
+Customize navigation arrow buttons with custom icons (e.g. FontAwesome class names or raw HTML `<i>` tags):
+
+```js
+new MSDatePicker(input, {
+  icons: {
+    prev: "fa fa-chevron-left",                // Sets icon using <i> tag class names
+    next: '<i class="bi bi-chevron-right"></i>', // Or sets icon using raw HTML tags
+  },
 });
 ```
 
